@@ -434,16 +434,16 @@ static int __devinit svec_probe(struct device *pdev, unsigned int ndev)
 	dev_info(pdev, "%s\n", svec->description);
 
 	dev_set_drvdata(svec->dev, svec);
-	error = svec_create_sysfs_files(svec);
+	error = svec_create_sysfs_files(svec);	/* FIXME: destroy these files on error exits */
 	if (error) {
 		dev_err(pdev, "Error creating sysfs files\n");
-		goto failed;
+		goto failed_unmap_crcsr;
 	}
 
 	/* Load the golden FPGA binary to read the eeprom */
 	error = svec_load_fpga_file(svec, svec->fw_name);
 	if (error)
-		goto failed;
+		goto failed_unmap_crcsr;
 
 	/* configure and activate function 0 */
 	svec_setup_csr_fa0(svec->map[MAP_CR_CSR]->kernel_va, vmebase[ndev],
@@ -452,7 +452,7 @@ static int __devinit svec_probe(struct device *pdev, unsigned int ndev)
 	/* Map A32 space */
 	error = svec_map_window(svec, MAP_REG);
 	if (error)
-		goto failed;
+		goto failed_unmap_crcsr;
 
 	error = svec_fmc_create(svec);
 	if (error) {
