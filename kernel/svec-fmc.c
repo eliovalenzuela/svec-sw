@@ -183,16 +183,16 @@ int svec_fmc_prepare(struct svec_dev *svec, unsigned int fmc_slot)
 	struct fmc_device *fmc;
 	int ret = 0;
 
+	/* FIXME: For now, only two mezzanines carrier */
+	if (fmc_slot > SVEC_N_SLOTS)
+		return -EINVAL;
+
 	fmc = kzalloc(sizeof(*fmc), GFP_KERNEL);
 	if (!fmc) {
 		dev_err(svec->dev, "cannot allocate fmc slot %d\n",
 			fmc_slot);
 		return -ENOMEM;
 	}
-
-	/* FIXME: For now, only two mezzanines carrier */
-	if (fmc_slot < 0 || fmc_slot > 1)
-		return -EINVAL;
 
 	fmc->version = FMC_VERSION;
 	fmc->carrier_name = "SVEC";
