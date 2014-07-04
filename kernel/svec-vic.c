@@ -98,16 +98,15 @@ static int svec_vic_init(struct svec_dev *svec, struct fmc_device *fmc)
 	return 0;
 }
 
-void svec_vic_exit(struct svec_dev *svec)
+void svec_vic_exit(struct vic_irq_controller *vic)
 {
-	if (!svec->vic)
+	if (!vic)
 		return;
 
 	/* Disable all irq lines and the VIC in general */
-	vic_writel(svec->vic, 0xffffffff, VIC_REG_IDR);
-	vic_writel(svec->vic, 0, VIC_REG_CTL);
-	kfree(svec->vic);
-	svec->vic = NULL;
+	vic_writel(vic, 0xffffffff, VIC_REG_IDR);
+	vic_writel(vic, 0, VIC_REG_CTL);
+	kfree(vic);
 }
 
 irqreturn_t svec_vic_irq_dispatch(struct svec_dev * svec)
@@ -214,7 +213,7 @@ int svec_vic_irq_free(struct svec_dev *svec, unsigned long id)
 
 	/* Clean up the VIC if there are no more handlers */
 	if (!vic_handler_count(svec->vic)) {
-		svec_vic_exit(svec);
+		svec_vic_exit(svec->vic);
 		svec->vic = NULL;
 	}
 
