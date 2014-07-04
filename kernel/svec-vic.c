@@ -180,6 +180,21 @@ int svec_vic_irq_request(struct svec_dev *svec, struct fmc_device *fmc,
 
 }
 
+
+/*
+ * vic_handler_count
+ * It counts how many handlers are registered within the VIC controller
+ */
+static inline int vic_handler_count(struct vic_irq_controller *vic)
+{
+       int i, count;
+
+       for (i = 0, count = 0; i < VIC_MAX_VECTORS; ++i)
+               if (vic->vectors[i].handler)
+                       count++;
+       return count;
+}
+
 int svec_vic_irq_free(struct svec_dev *svec, unsigned long id)
 {
 	int i;
@@ -195,6 +210,12 @@ int svec_vic_irq_free(struct svec_dev *svec, unsigned long id)
 
 			spin_unlock(&svec->irq_lock);
 		}
+	}
+
+	/* Clean up the VIC if there are no more handlers */
+	if (!vic_handler_count(svec->vic)) {
+		svec_vic_cleanup(svec);
+		svec->vic = NULL;
 	}
 
 	return 0;

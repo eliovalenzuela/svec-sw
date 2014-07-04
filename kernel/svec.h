@@ -149,7 +149,6 @@ irqreturn_t svec_vic_irq_dispatch(struct svec_dev *svec);
 int svec_vic_irq_request(struct svec_dev *svec, struct fmc_device *fmc, unsigned long id, irq_handler_t handler);
 int svec_vic_irq_free(struct svec_dev *svec, unsigned long id);
 void svec_vic_irq_ack(struct svec_dev *svec, unsigned long id);
-void svec_vic_cleanup(struct svec_dev *svec);
 
 /* Generic IRQ routines */
 
