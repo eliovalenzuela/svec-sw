@@ -196,7 +196,8 @@ static inline int vic_handler_count(struct vic_irq_controller *vic)
        return count;
 }
 
-int svec_vic_irq_free(struct svec_dev *svec, unsigned long id)
+
+void svec_vic_irq_free(struct svec_dev *svec, unsigned long id)
 {
 	int i;
 
@@ -218,8 +219,6 @@ int svec_vic_irq_free(struct svec_dev *svec, unsigned long id)
 		svec_vic_exit(svec->vic);
 		svec->vic = NULL;
 	}
-
-	return 0;
 }
 
 void svec_vic_irq_ack(struct svec_dev *svec, unsigned long id)
