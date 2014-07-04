@@ -98,7 +98,7 @@ static int svec_vic_init(struct svec_dev *svec, struct fmc_device *fmc)
 	return 0;
 }
 
-void svec_vic_cleanup(struct svec_dev *svec)
+void svec_vic_exit(struct svec_dev *svec)
 {
 	if (!svec->vic)
 		return;
@@ -214,7 +214,7 @@ int svec_vic_irq_free(struct svec_dev *svec, unsigned long id)
 
 	/* Clean up the VIC if there are no more handlers */
 	if (!vic_handler_count(svec->vic)) {
-		svec_vic_cleanup(svec);
+		svec_vic_exit(svec);
 		svec->vic = NULL;
 	}
 
