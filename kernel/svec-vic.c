@@ -202,12 +202,11 @@ void svec_vic_irq_free(struct svec_dev *svec, unsigned long id)
 	int i;
 
 	for (i = 0; i < VIC_MAX_VECTORS; i++) {
-		uint32_t vec = svec->vic->vectors[i].saved_id;
-		if (vec == id) {
+		if (svec->vic->vectors[i].saved_id == id) {
 			spin_lock(&svec->vic->vec_lock);
 
 			vic_writel(svec->vic, 1 << i, VIC_REG_IDR);
-			vic_writel(svec->vic, vec, VIC_IVT_RAM_BASE + 4 * i);
+			vic_writel(svec->vic, id, VIC_IVT_RAM_BASE + 4 * i);
 			svec->vic->vectors[i].handler = NULL;
 
 			spin_unlock(&svec->vic->vec_lock);
