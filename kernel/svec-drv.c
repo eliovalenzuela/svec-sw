@@ -718,6 +718,8 @@ static int svec_probe(struct device *pdev, unsigned int ndev)
 		return -ENOMEM;
 	}
 
+	spin_lock_init(&svec->irq_lock);
+
 	/* Initialize struct fields */
 	svec->verbose = verbose;
 	svec->lun = lun[ndev];
