@@ -156,7 +156,6 @@ int svec_irq_request(struct fmc_device *fmc, irq_handler_t handler, char *name,
 		     int flags);
 void svec_irq_ack(struct fmc_device *fmc);
 int svec_irq_free(struct fmc_device *fmc);
-void svec_irq_exit(struct svec_dev *svec);
 
 #endif /* __SVEC_H__ */
 

@@ -119,13 +119,3 @@ int svec_irq_free(struct fmc_device *fmc)
 
 	return 0;
 }
-
-/* cleanup function, disables VME master interrupt when the driver is unloaded */
-void svec_irq_exit(struct svec_dev *svec)
-{
-	if (!test_bit(SVEC_FLAG_IRQS_REQUESTED, &svec->flags))
-		return;
-
-	vme_free_irq(svec->current_vector);
-	memset(svec->fmc_handlers, 0, sizeof(svec->fmc_handlers));
-}
