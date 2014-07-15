@@ -1,7 +1,7 @@
 LINUX ?= /lib/modules/$(shell uname -r)/build
 
-FMC_DRV ?= $(shell ../check-fmc-bus)
-export FMC_DRV
+FMC_BUS ?= $(shell pwd)/../fmc-bus
+export FMC_BUS
 
 GIT_VERSION = $(shell git describe --dirty --long --tags)
 
@@ -12,7 +12,7 @@ else
   ccflags-y += -DCERN_SUPER_MODULE=""
 endif
 
-ccflags-y += -I$(FMC_DRV)/include
+ccflags-y += -I$(FMC_BUS)/kernel/include
 ccflags-y += -DDEBUG
 ccflags-y += -DGIT_VERSION=\"$(GIT_VERSION)\"
 
