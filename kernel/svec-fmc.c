@@ -274,6 +274,12 @@ void svec_fmc_destroy(struct svec_dev *svec)
 		return;
 
 	fmc_device_unregister_n(svec->fmcs, svec->fmcs_n);
+
+	WARN(test_bit(SVEC_FLAG_IRQS_REQUESTED, &svec->flags) || svec->vic,
+	     "A Mezzanine driver didn't release all its IRQ handlers (VIC %p, FLAG 0x%x)\n",
+	     svec->vic, svec->flags);
+	memset(svec->fmcs, 0, sizeof(struct fmc_devices *) * SVEC_N_SLOTS);
+
 	if(svec->verbose)
 	dev_info(svec->dev, "%d fmc devices unregistered\n", svec->fmcs_n);
 

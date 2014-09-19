@@ -24,6 +24,8 @@
 
 /* A Vectored Interrupt Controller object */
 struct vic_irq_controller {
+	/* It protects the handlers' vector */
+	spinlock_t vec_lock;
 	/* already-initialized flag */
 	int initialized;
 	/* Base address (FPGA-relative) */
@@ -78,6 +80,7 @@ static int svec_vic_init(struct svec_dev *svec, struct fmc_device *fmc)
 	if (!vic)
 		return -ENOMEM;
 
+	spin_lock_init(&vic->vec_lock);
 	vic->kernel_va = svec->map[MAP_REG]->kernel_va + vic_base;
 	vic->base = (uint32_t) vic_base;
 
@@ -98,16 +101,15 @@ static int svec_vic_init(struct svec_dev *svec, struct fmc_device *fmc)
 	return 0;
 }
 
-void svec_vic_cleanup(struct svec_dev *svec)
+void svec_vic_exit(struct vic_irq_controller *vic)
 {
-	if (!svec->vic)
+	if (!vic)
 		return;
 
 	/* Disable all irq lines and the VIC in general */
-	vic_writel(svec->vic, 0xffffffff, VIC_REG_IDR);
-	vic_writel(svec->vic, 0, VIC_REG_CTL);
-	kfree(svec->vic);
-	svec->vic = NULL;
+	vic_writel(vic, 0xffffffff, VIC_REG_IDR);
+	vic_writel(vic, 0, VIC_REG_CTL);
+	kfree(vic);
 }
 
 irqreturn_t svec_vic_irq_dispatch(struct svec_dev * svec)
@@ -162,15 +164,14 @@ int svec_vic_irq_request(struct svec_dev *svec, struct fmc_device *fmc,
 	for (i = 0; i < VIC_MAX_VECTORS; i++) {
 		/* find the vector in the stored table, assign handler and enable the line if exists */
 		if (vic->vectors[i].saved_id == id) {
-			spin_lock(&svec->irq_lock);
+			spin_lock(&svec->vic->vec_lock);
 
 			vic_writel(vic, i, VIC_IVT_RAM_BASE + 4 * i);
 			vic->vectors[i].requestor = fmc;
 			vic->vectors[i].handler = handler;
 			vic_writel(vic, (1 << i), VIC_REG_IER);
 
-			spin_unlock(&svec->irq_lock);
-
+			spin_unlock(&svec->vic->vec_lock);
 			return 0;
 
 		}
@@ -180,24 +181,43 @@ int svec_vic_irq_request(struct svec_dev *svec, struct fmc_device *fmc,
 
 }
 
-int svec_vic_irq_free(struct svec_dev *svec, unsigned long id)
+
+/*
+ * vic_handler_count
+ * It counts how many handlers are registered within the VIC controller
+ */
+static inline int vic_handler_count(struct vic_irq_controller *vic)
+{
+       int i, count;
+
+       for (i = 0, count = 0; i < VIC_MAX_VECTORS; ++i)
+               if (vic->vectors[i].handler)
+                       count++;
+       return count;
+}
+
+
+void svec_vic_irq_free(struct svec_dev *svec, unsigned long id)
 {
 	int i;
 
 	for (i = 0; i < VIC_MAX_VECTORS; i++) {
-		uint32_t vec = svec->vic->vectors[i].saved_id;
-		if (vec == id) {
-			spin_lock(&svec->irq_lock);
+		if (svec->vic->vectors[i].saved_id == id) {
+			spin_lock(&svec->vic->vec_lock);
 
 			vic_writel(svec->vic, 1 << i, VIC_REG_IDR);
-			vic_writel(svec->vic, vec, VIC_IVT_RAM_BASE + 4 * i);
+			vic_writel(svec->vic, id, VIC_IVT_RAM_BASE + 4 * i);
 			svec->vic->vectors[i].handler = NULL;
 
-			spin_unlock(&svec->irq_lock);
+			spin_unlock(&svec->vic->vec_lock);
 		}
 	}
 
-	return 0;
+	/* Clean up the VIC if there are no more handlers */
+	if (!vic_handler_count(svec->vic)) {
+		svec_vic_exit(svec->vic);
+		svec->vic = NULL;
+	}
 }
 
 void svec_vic_irq_ack(struct svec_dev *svec, unsigned long id)

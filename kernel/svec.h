@@ -147,9 +147,8 @@ int svec_load_golden(struct svec_dev *svec);
 /* VIC interrupt controller stuff */
 irqreturn_t svec_vic_irq_dispatch(struct svec_dev *svec);
 int svec_vic_irq_request(struct svec_dev *svec, struct fmc_device *fmc, unsigned long id, irq_handler_t handler);
-int svec_vic_irq_free(struct svec_dev *svec, unsigned long id);
+void svec_vic_irq_free(struct svec_dev *svec, unsigned long id);
 void svec_vic_irq_ack(struct svec_dev *svec, unsigned long id);
-void svec_vic_cleanup(struct svec_dev *svec);
 
 /* Generic IRQ routines */
 
@@ -157,7 +156,6 @@ int svec_irq_request(struct fmc_device *fmc, irq_handler_t handler, char *name,
 		     int flags);
 void svec_irq_ack(struct fmc_device *fmc);
 int svec_irq_free(struct fmc_device *fmc);
-void svec_irq_exit(struct svec_dev *svec);
 
 #endif /* __SVEC_H__ */
 

@@ -100,12 +100,13 @@ int svec_irq_free(struct fmc_device *fmc)
 	if (!test_bit(SVEC_FLAG_IRQS_REQUESTED, &svec->flags))
 		return -EINVAL;
 
-	if (svec->vic)
-		return svec_vic_irq_free(svec, fmc->irq);
-
-	spin_lock(&svec->irq_lock);
-	svec->fmc_handlers[fmc->slot_id] = NULL;
-	spin_unlock(&svec->irq_lock);
+	if (svec->vic) {
+		svec_vic_irq_free(svec, fmc->irq);
+	} else {
+		spin_lock(&svec->irq_lock);
+		svec->fmc_handlers[fmc->slot_id] = NULL;
+		spin_unlock(&svec->irq_lock);
+	}
 
 	/* shared IRQ mode: disable VME interrupt when freeing last FMC handler */
 	if (!svec->vic && !svec->fmc_handlers[0] && !svec->fmc_handlers[1]) {
@@ -117,17 +118,4 @@ int svec_irq_free(struct fmc_device *fmc)
 	}
 
 	return 0;
-}
-
-/* cleanup function, disables VME master interrupt when the driver is unloaded */
-void svec_irq_exit(struct svec_dev *svec)
-{
-	if (!test_bit(SVEC_FLAG_IRQS_REQUESTED, &svec->flags))
-		return;
-
-	vme_free_irq(svec->current_vector);
-	memset(svec->fmc_handlers, 0, sizeof(svec->fmc_handlers));
-
-	if (svec->vic)
-		svec_vic_cleanup(svec);
 }

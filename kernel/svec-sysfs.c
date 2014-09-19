@@ -33,10 +33,7 @@ static int svec_fw_cmd_reset (struct svec_dev * card)
 {
 	int err = 0;
 	if (test_bit (SVEC_FLAG_FMCS_REGISTERED, &card->flags))
-	{
 		svec_fmc_destroy (card);
-		svec_irq_exit (card);
-	}
 
 	if (!card->map[MAP_CR_CSR])
 		err = svec_map_window (card, MAP_CR_CSR);
