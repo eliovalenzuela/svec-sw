@@ -5,7 +5,7 @@
 * Released according to the GNU GPL, version 2 or any later version
 *
 * Driver for SVEC (Simple VME FMC carrier) board.
-* VIC (Vectored Interrupt Controller) support code. 
+* VIC (Vectored Interrupt Controller) support code.
 */
 
 #include <linux/interrupt.h>
@@ -62,10 +62,10 @@ static int svec_vic_init(struct svec_dev *svec, struct fmc_device *fmc)
 	signed long vic_base;
 	struct vic_irq_controller *vic;
 
-	/* Try to look up the VIC in the SDB tree - note that IRQs shall be requested after the
-	   FMC driver has scanned the SDB tree */
-	vic_base =
-	    fmc_find_sdb_device(fmc->sdb, VIC_SDB_VENDOR, VIC_SDB_DEVICE, NULL);
+	/* Try to look up the VIC in the SDB tree - note that IRQs shall
+	   be requested after the FMC driver has scanned the SDB tree */
+	vic_base = fmc_find_sdb_device(fmc->sdb, VIC_SDB_VENDOR,
+				       VIC_SDB_DEVICE, NULL);
 
 	if (vic_base < 0) {
 		dev_err(svec->dev,
@@ -73,8 +73,8 @@ static int svec_vic_init(struct svec_dev *svec, struct fmc_device *fmc)
 		return -ENODEV;
 	}
 
-	if(svec->verbose)
-	dev_info(svec->dev, "Found VIC @ 0x%lx\n", vic_base);
+	if (svec->verbose)
+		dev_info(svec->dev, "Found VIC @ 0x%lx\n", vic_base);
 
 	vic = kzalloc(sizeof(struct vic_irq_controller), GFP_KERNEL);
 	if (!vic)
@@ -87,13 +87,15 @@ static int svec_vic_init(struct svec_dev *svec, struct fmc_device *fmc)
 	/* disable all IRQs, copy the vector table with pre-defined IRQ ids */
 	vic_writel(vic, 0xffffffff, VIC_REG_IDR);
 	for (i = 0; i < VIC_MAX_VECTORS; i++)
-		vic->vectors[i].saved_id =
-		    vic_readl(vic, VIC_IVT_RAM_BASE + 4 * i);
+		vic->vectors[i].saved_id = vic_readl(vic,
+						     VIC_IVT_RAM_BASE + 4 * i);
 
-	/* configure the VIC output: active high, edge sensitive, pulse width = 1 tick (16 ns) */
+	/* configure the VIC output:
+	   active high, edge sensitive, pulse width = 1 tick (16 ns),
+	   160 us IRQ retry timer */
 	vic_writel(vic,
 		   VIC_CTL_ENABLE | VIC_CTL_POL | VIC_CTL_EMU_EDGE |
-		   VIC_CTL_EMU_LEN_W(40000), VIC_REG_CTL); /* 160 us IRQ retry timer */
+		   VIC_CTL_EMU_LEN_W(40000), VIC_REG_CTL);
 
 	vic->initialized = 1;
 	svec->vic = vic;
@@ -112,15 +114,15 @@ void svec_vic_exit(struct vic_irq_controller *vic)
 	kfree(vic);
 }
 
-irqreturn_t svec_vic_irq_dispatch(struct svec_dev * svec)
+irqreturn_t svec_vic_irq_dispatch(struct svec_dev *svec)
 {
 	struct vic_irq_controller *vic = svec->vic;
 	int index, rv;
 	struct vector *vec;
 
 	do {
-		/* Our parent IRQ handler: read the index value from the Vector Address Register,
-		   and find matching handler */
+		/* Our parent IRQ handler: read the index value from
+		   the Vector Address Register, and find matching handler */
 		index = vic_readl(vic, VIC_REG_VAR) & 0xff;
 
 		if (index >= VIC_MAX_VECTORS)
@@ -131,18 +133,18 @@ irqreturn_t svec_vic_irq_dispatch(struct svec_dev * svec)
 			goto fail;
 
 		rv = vec->handler(vec->saved_id, vec->requestor);
-		    
+
 		vic_writel(vic, 0, VIC_REG_EOIR);	/* ack the irq */
 
-		if(rv < 0)
-		    break;
+		if (rv < 0)
+			break;
 
 	/* check if any IRQ is still pending */
 	} while (vic_readl(vic, VIC_REG_RISR));
-	
+
 	return rv;
 
-      fail:
+fail:
 	return 0;
 }
 
@@ -162,7 +164,8 @@ int svec_vic_irq_request(struct svec_dev *svec, struct fmc_device *fmc,
 	vic = svec->vic;
 
 	for (i = 0; i < VIC_MAX_VECTORS; i++) {
-		/* find the vector in the stored table, assign handler and enable the line if exists */
+		/* find the vector in the stored table, assign handler
+		   and enable the line if exists */
 		if (vic->vectors[i].saved_id == id) {
 			spin_lock(&svec->vic->vec_lock);
 
@@ -173,7 +176,6 @@ int svec_vic_irq_request(struct svec_dev *svec, struct fmc_device *fmc,
 
 			spin_unlock(&svec->vic->vec_lock);
 			return 0;
-
 		}
 	}
 
@@ -188,12 +190,12 @@ int svec_vic_irq_request(struct svec_dev *svec, struct fmc_device *fmc,
  */
 static inline int vic_handler_count(struct vic_irq_controller *vic)
 {
-       int i, count;
+	int i, count;
 
-       for (i = 0, count = 0; i < VIC_MAX_VECTORS; ++i)
-               if (vic->vectors[i].handler)
-                       count++;
-       return count;
+	for (i = 0, count = 0; i < VIC_MAX_VECTORS; ++i)
+		if (vic->vectors[i].handler)
+			count++;
+	return count;
 }
 
 

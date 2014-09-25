@@ -60,8 +60,8 @@ static int svec_reprogram(struct fmc_device *fmc, struct fmc_driver *drv,
 			return -ESRCH;	/* the caller may accept this */
 	}
 
-	if(svec->verbose)
-	dev_info(fmc->hwdev, "reprogramming with %s\n", gw);
+	if (svec->verbose)
+		dev_info(fmc->hwdev, "reprogramming with %s\n", gw);
 	ret = request_firmware(&fw, gw, dev);
 	if (ret < 0) {
 		dev_warn(dev, "request firmware \"%s\": error %i\n", gw, ret);
@@ -83,7 +83,7 @@ static int svec_reprogram(struct fmc_device *fmc, struct fmc_driver *drv,
 
 	fmc->flags |= FMC_DEVICE_HAS_CUSTOM;
 
-      out:
+out:
 	release_firmware(fw);
 	if (ret < 0)
 		dev_err(dev, "svec reprogram failed while loading %s\n", gw);
@@ -113,7 +113,7 @@ static int svec_write_ee(struct fmc_device *fmc, int pos,
 {
 	if (!(fmc->flags & FMC_DEVICE_HAS_GOLDEN))
 		return -ENOTSUPP;
-		
+
 	return svec_eeprom_write(fmc, pos, data, len);
 }
 
@@ -142,7 +142,8 @@ static int check_golden(struct fmc_device *fmc)
 		dev_err(svec->dev, "Bad SDB magic: 0x%08x\n", magic);
 		return -ENODEV;
 	}
-	if ((ret = fmc_scan_sdb_tree(fmc, 0x0)) < 0)
+	ret = fmc_scan_sdb_tree(fmc, 0x0);
+	if (ret < 0)
 		return -ENODEV;
 
 	vendor = fmc_readl(fmc, 0x5c);
@@ -213,7 +214,7 @@ int svec_fmc_prepare(struct svec_dev *svec, unsigned int fmc_slot)
 	}
 
 	fmc->flags |= FMC_DEVICE_HAS_GOLDEN;
-	
+
 	ret = svec_i2c_init(fmc);
 	if (ret) {
 		dev_err(svec->dev, "Error %d on svec i2c init", ret);
@@ -222,10 +223,10 @@ int svec_fmc_prepare(struct svec_dev *svec, unsigned int fmc_slot)
 	}
 
 	svec->fmcs[fmc_slot] = fmc;
-	
-	if(svec->verbose)
-	dev_info(svec->dev, "ready to create fmc device_id 0x%x\n",
-		 fmc->device_id);
+
+	if (svec->verbose)
+		dev_info(svec->dev, "ready to create fmc device_id 0x%x\n",
+			 fmc->device_id);
 
 	return ret;
 }
@@ -238,7 +239,6 @@ int svec_fmc_create(struct svec_dev *svec)
 	/* fmc structures filling */
 	for (i = 0; i < svec->fmcs_n; i++) {
 		error = svec_fmc_prepare(svec, i);
-
 		if (error)
 			goto failed;
 	}
@@ -252,16 +252,14 @@ int svec_fmc_create(struct svec_dev *svec)
 	/* FIXME: how do we retrieve the actual number of registered
 	 * devices?
 	 */
-	if(svec->verbose)
-	dev_info(svec->dev, "fmc devices registered\n");
+	if (svec->verbose)
+		dev_info(svec->dev, "fmc devices registered\n");
 
 	return 0;
 
-      failed:
-
+failed:
 	for (i = 0; i < svec->fmcs_n; i++)
-		if (svec->fmcs[i])
-			kfree(svec->fmcs[i]);
+		kfree(svec->fmcs[i]);
 
 	/* FIXME: free fmc allocations. */
 	return error;
@@ -280,7 +278,8 @@ void svec_fmc_destroy(struct svec_dev *svec)
 	     svec->vic, svec->flags);
 	memset(svec->fmcs, 0, sizeof(struct fmc_devices *) * SVEC_N_SLOTS);
 
-	if(svec->verbose)
-	dev_info(svec->dev, "%d fmc devices unregistered\n", svec->fmcs_n);
+	if (svec->verbose)
+		dev_info(svec->dev, "%d fmc devices unregistered\n",
+			 svec->fmcs_n);
 
 }

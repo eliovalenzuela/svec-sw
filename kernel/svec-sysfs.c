@@ -29,48 +29,49 @@
 #define FW_CMD_RESET 0
 #define FW_CMD_PROGRAM 1
 
-static int svec_fw_cmd_reset (struct svec_dev * card)
+static int svec_fw_cmd_reset(struct svec_dev *card)
 {
 	int err = 0;
-	if (test_bit (SVEC_FLAG_FMCS_REGISTERED, &card->flags))
-		svec_fmc_destroy (card);
+
+	if (test_bit(SVEC_FLAG_FMCS_REGISTERED, &card->flags))
+		svec_fmc_destroy(card);
 
 	if (!card->map[MAP_CR_CSR])
-		err = svec_map_window (card, MAP_CR_CSR);
+		err = svec_map_window(card, MAP_CR_CSR);
 
-	if(err < 0)
+	if (err < 0)
 		return err;
 
-	svec_bootloader_unlock (card);
+	svec_bootloader_unlock(card);
 
-	if (!svec_is_bootloader_active (card))
+	if (!svec_is_bootloader_active(card))
 		return -ENODEV;
 
-	if (card->fw_buffer)
-		kfree (card->fw_buffer);
+	kfree(card->fw_buffer);
 
-	card->fw_buffer = vmalloc (SVEC_MAX_GATEWARE_SIZE);
+	card->fw_buffer = vmalloc(SVEC_MAX_GATEWARE_SIZE);
 	card->fw_length = 0;
 	card->fw_hash = 0xffffffff;
 	return 0;
 }
 
-static int svec_fw_cmd_program (struct svec_dev * card)
+static int svec_fw_cmd_program(struct svec_dev *card)
 {
 	int err;
-	if (!card->fw_buffer || !card->fw_length)
-	    return -EINVAL;
 
-	err = svec_load_fpga (card, card->fw_buffer, card->fw_length);
-	
-	vfree (card->fw_buffer);
+	if (!card->fw_buffer || !card->fw_length)
+		return -EINVAL;
+
+	err = svec_load_fpga(card, card->fw_buffer, card->fw_length);
+
+	vfree(card->fw_buffer);
 
 	card->fw_buffer = NULL;
 	card->fw_length = 0;
 	if (err < 0)
 		return err;
 
-	svec_reconfigure (card);
+	svec_reconfigure(card);
 	return 0;
 }
 
@@ -110,19 +111,17 @@ ATTR_STORE_CALLBACK(firmware_name)
 ATTR_STORE_CALLBACK(firmware_cmd)
 {
 	int cmd;
-
 	struct svec_dev *card = dev_get_drvdata(pdev);
 
 	if (sscanf(buf, "%i", &cmd) != 1)
 		return -EINVAL;
 
-	switch(cmd)
-	{
-	    case FW_CMD_RESET:
-		return svec_fw_cmd_reset (card);
-	    case FW_CMD_PROGRAM:
-		return svec_fw_cmd_program (card);
-	    default:
+	switch (cmd) {
+	case FW_CMD_RESET:
+		return svec_fw_cmd_reset(card);
+	case FW_CMD_PROGRAM:
+		return svec_fw_cmd_program(card);
+	default:
 		return -EINVAL;
 	}
 
@@ -134,16 +133,15 @@ ATTR_STORE_CALLBACK(firmware_blob)
 	struct svec_dev *card = dev_get_drvdata(pdev);
 
 	if (!card->fw_buffer)
-	    return -EAGAIN;
-	
-	if (card->fw_length + count - 1 >= SVEC_MAX_GATEWARE_SIZE)
-	    return -EINVAL;
+		return -EAGAIN;
 
-	memcpy (card->fw_buffer + card->fw_length, buf, count);
+	if (card->fw_length + count - 1 >= SVEC_MAX_GATEWARE_SIZE)
+		return -EINVAL;
+
+	memcpy(card->fw_buffer + card->fw_length, buf, count);
 	card->fw_length += count;
 
 	return count;
-    
 }
 
 ATTR_SHOW_CALLBACK(dummy_attr)
@@ -154,6 +152,7 @@ ATTR_SHOW_CALLBACK(dummy_attr)
 ATTR_SHOW_CALLBACK(interrupt_vector)
 {
 	struct svec_dev *card = dev_get_drvdata(pdev);
+
 	return snprintf(buf, PAGE_SIZE, "0x%x\n",
 			card->cfg_cur.interrupt_vector);
 }
@@ -161,13 +160,13 @@ ATTR_SHOW_CALLBACK(interrupt_vector)
 ATTR_SHOW_CALLBACK(interrupt_level)
 {
 	struct svec_dev *card = dev_get_drvdata(pdev);
+
 	return snprintf(buf, PAGE_SIZE, "%d\n", card->cfg_cur.interrupt_level);
 }
 
 ATTR_STORE_CALLBACK(interrupt_level)
 {
 	int lvl;
-
 	struct svec_dev *card = dev_get_drvdata(pdev);
 
 	if (sscanf(buf, "%i", &lvl) != 1)
@@ -182,7 +181,6 @@ ATTR_STORE_CALLBACK(interrupt_level)
 ATTR_STORE_CALLBACK(interrupt_vector)
 {
 	int vec;
-
 	struct svec_dev *card = dev_get_drvdata(pdev);
 
 	if (sscanf(buf, "%i", &vec) != 1)
@@ -197,13 +195,13 @@ ATTR_STORE_CALLBACK(interrupt_vector)
 ATTR_SHOW_CALLBACK(vme_am)
 {
 	struct svec_dev *card = dev_get_drvdata(pdev);
+
 	return snprintf(buf, PAGE_SIZE, "0x%x\n", card->cfg_cur.vme_am);
 }
 
 ATTR_STORE_CALLBACK(vme_am)
 {
 	int am;
-
 	struct svec_dev *card = dev_get_drvdata(pdev);
 
 	if (sscanf(buf, "%i", &am) != 1)
@@ -216,6 +214,7 @@ ATTR_STORE_CALLBACK(vme_am)
 ATTR_SHOW_CALLBACK(vme_base)
 {
 	struct svec_dev *card = dev_get_drvdata(pdev);
+
 	return snprintf(buf, PAGE_SIZE, "0x%x\n", card->cfg_cur.vme_base);
 }
 
@@ -235,6 +234,7 @@ ATTR_STORE_CALLBACK(vme_base)
 ATTR_SHOW_CALLBACK(vme_size)
 {
 	struct svec_dev *card = dev_get_drvdata(pdev);
+
 	return snprintf(buf, PAGE_SIZE, "0x%x\n", card->cfg_cur.vme_size);
 }
 
@@ -254,6 +254,7 @@ ATTR_STORE_CALLBACK(vme_size)
 ATTR_SHOW_CALLBACK(vme_addr)
 {
 	struct svec_dev *card = dev_get_drvdata(pdev);
+
 	return snprintf(buf, PAGE_SIZE, "0x%x\n", card->vme_raw_addr);
 }
 
@@ -298,13 +299,13 @@ static int __next_token(char **str, char *buf, int buf_length)
 	char *p = *str, *tok;
 	int len;
 
-	while(isspace (*p))
+	while (isspace(*p))
 		p++;
 
-	if(*p == 0)
+	if (*p == 0)
 		return 0;
 	tok = p;
-	while(*p && !isspace(*p))
+	while (*p && !isspace(*p))
 		p++;
 
 	len = min(p - tok + 1, buf_length - 1);
@@ -321,12 +322,11 @@ ATTR_STORE_CALLBACK(vme_data)
 	uint32_t data;
 	uint32_t addr = card->vme_raw_addr;
 	char *args = (char *) buf, token[16];
-	
+
 	if (!card->cfg_cur.configured)
 		return -EAGAIN;
 
-	while (__next_token (&args, token, sizeof(token)))
-	{
+	while (__next_token(&args, token, sizeof(token))) {
 		if (sscanf(token, "%i", &data) != 1)
 			return -EINVAL;
 
@@ -340,6 +340,7 @@ ATTR_STORE_CALLBACK(vme_data)
 ATTR_SHOW_CALLBACK(use_vic)
 {
 	struct svec_dev *card = dev_get_drvdata(pdev);
+
 	return snprintf(buf, PAGE_SIZE, "%d", card->cfg_cur.use_vic);
 }
 
@@ -363,13 +364,13 @@ ATTR_STORE_CALLBACK(use_vic)
 ATTR_SHOW_CALLBACK(use_fmc)
 {
 	struct svec_dev *card = dev_get_drvdata(pdev);
+
 	return snprintf(buf, PAGE_SIZE, "%d\n", card->cfg_cur.use_fmc);
 }
 
 ATTR_STORE_CALLBACK(use_fmc)
 {
 	int enabled;
-
 	struct svec_dev *card = dev_get_drvdata(pdev);
 
 	if (sscanf(buf, "%i", &enabled) != 1)
@@ -385,6 +386,7 @@ ATTR_STORE_CALLBACK(use_fmc)
 ATTR_SHOW_CALLBACK(configured)
 {
 	struct svec_dev *card = dev_get_drvdata(pdev);
+
 	return snprintf(buf, PAGE_SIZE, "%d\n", card->cfg_cur.configured);
 }
 
@@ -409,6 +411,7 @@ ATTR_STORE_CALLBACK(configured)
 ATTR_SHOW_CALLBACK(slot)
 {
 	struct svec_dev *card = dev_get_drvdata(pdev);
+
 	return snprintf(buf, PAGE_SIZE, "%d\n", card->slot);
 }
 
@@ -428,8 +431,8 @@ static DEVICE_ATTR(firmware_blob,
   the userspace tools. */
 static DEVICE_ATTR(slot, S_IRUGO, svec_show_slot, NULL);
 
-/* Standard VME configuration attributes. Committed in atomic way by writing 1 to
-  1 to 'configured' attribute. */
+/* Standard VME configuration attributes. Committed in atomic way by
+   writing 1 to 1 to 'configured' attribute. */
 static DEVICE_ATTR(interrupt_vector,
 		   S_IWUSR | S_IRUGO,
 		   svec_show_interrupt_vector, svec_store_interrupt_vector);
@@ -448,20 +451,22 @@ static DEVICE_ATTR(vme_am,
 		   S_IWUSR | S_IRUGO, svec_show_vme_am, svec_store_vme_am);
 
 /*
-  Enables support for the Vectored Interrupt Controller (VIC). 
+  Enables support for the Vectored Interrupt Controller (VIC).
   By default, the VIC is enabled and enumerated through SDB the first
   time the FMC driver requests an interrupt. If no VIC is found, the driver
-  falls back to shared IRQ mode. This attribute is only to be used in exceptional
-  situations, where even attempting to look for the VIC may screw the card. */
+  falls back to shared IRQ mode. This attribute is only to be used in
+  exceptional situations, where even attempting to look for the VIC may
+  screw the card.
+*/
 
 static DEVICE_ATTR(use_vic,
 		   S_IWUSR | S_IRUGO, svec_show_use_vic, svec_store_use_vic);
 
 /*
-  Enables registration of the FMCs after checking their FRU information.
-  Enabled by default, you may want to disable it for debugging purposes (programming
-  EEPROMs and/or raw VME access)
-  */
+ * Enables registration of the FMCs after checking their FRU information.
+ * Enabled by default, you may want to disable it for debugging purposes
+ * (programming  EEPROMs and/or raw VME access)
+ */
 
 static DEVICE_ATTR(use_fmc,
 		   S_IWUSR | S_IRUGO, svec_show_use_fmc, svec_store_use_fmc);

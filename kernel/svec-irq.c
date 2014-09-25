@@ -25,21 +25,30 @@ static int svec_irq_handler(void *data)
 
 	svec->irq_count++;
 
-	/* just in case we had an IRQ while messing around with the VIC registers/fmc_handlers */
+	/*
+	 * just in case we had an IRQ while messing around with the
+	 * VIC registers/fmc_handlers
+	 */
 	spin_lock_irqsave(&svec->irq_lock, flags);
 
 	if (svec->vic)
 		rv = svec_vic_irq_dispatch(svec);
 	else {
-		/* shared irq mode: call all handlers until one of them has dealt with the interrupt */
+		/*
+		 * shared irq mode: call all handlers until one of them
+		 * has dealt with the interrupt
+		 */
 		for (i = 0; i < SVEC_N_SLOTS; i++) {
 			irq_handler_t handler = svec->fmc_handlers[i];
 
-			/* Call all handlers even if the current one returned IRQ_HANDLED. The SVEC
-			   VME Core IRQ is edge-sensitive, doing otherwise could result in missed irqs! */
-			if (handler) 
+			/*
+			 * Call all handlers even if the current one
+			 * returned IRQ_HANDLED. The SVEC VME Core IRQ
+			 * is edge-sensitive, doing otherwise could
+			 * result in missed irqs!
+			 */
+			if (handler)
 				handler(i, svec->fmcs[i]);
-			
 		}
 	}
 
@@ -59,7 +68,10 @@ int svec_irq_request(struct fmc_device *fmc, irq_handler_t handler,
 	struct svec_dev *svec = (struct svec_dev *)fmc->carrier_data;
 	int rv = 0;
 
-	/* Depending on IRQF_SHARED flag, choose between a VIC and shared IRQ mode */
+	/*
+	 * Depending on IRQF_SHARED flag, choose between a VIC and
+	 * shared IRQ mode
+	 */
 	if (!flags)
 		rv = svec_vic_irq_request(svec, fmc, fmc->irq, handler);
 	else if (flags & IRQF_SHARED) {
@@ -69,7 +81,10 @@ int svec_irq_request(struct fmc_device *fmc, irq_handler_t handler,
 	} else
 		return -EINVAL;
 
-	/* register the master VME handler the first time somebody requests an interrupt */
+	/*
+	 * register the master VME handler the first time somebody
+	 * requests an interrupt
+	 */
 	if (!rv && !test_bit(SVEC_FLAG_IRQS_REQUESTED, &svec->flags)) {
 
 		rv = vme_request_irq(svec->cfg_cur.interrupt_vector,
@@ -87,6 +102,7 @@ int svec_irq_request(struct fmc_device *fmc, irq_handler_t handler,
 void svec_irq_ack(struct fmc_device *fmc)
 {
 	struct svec_dev *svec = (struct svec_dev *)fmc->carrier_data;
+
 	if (svec->vic)
 		svec_vic_irq_ack(svec, fmc->irq);
 }
@@ -108,7 +124,10 @@ int svec_irq_free(struct fmc_device *fmc)
 		spin_unlock(&svec->irq_lock);
 	}
 
-	/* shared IRQ mode: disable VME interrupt when freeing last FMC handler */
+	/*
+	 * shared IRQ mode: disable VME interrupt when freeing last
+	 * FMC handler
+	 */
 	if (!svec->vic && !svec->fmc_handlers[0] && !svec->fmc_handlers[1]) {
 		rv = vme_free_irq(svec->current_vector);
 		if (rv < 0)

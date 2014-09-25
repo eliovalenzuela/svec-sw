@@ -38,7 +38,7 @@ static int vme_am[SVEC_MAX_DEVICES] = SVEC_DEFAULT_VME_AM;
 static unsigned int vme_am_num;
 static int vme_size[SVEC_MAX_DEVICES] = SVEC_DEFAULT_VME_SIZE;
 static unsigned int vme_size_num;
-static int verbose = 0;
+static int verbose;
 
 module_param_array(slot, int, &slot_num, S_IRUGO);
 MODULE_PARM_DESC(slot, "Slot where SVEC card is installed");
@@ -59,13 +59,14 @@ MODULE_PARM_DESC(level, "IRQ level");
 module_param(verbose, int, S_IRUGO);
 MODULE_PARM_DESC(verbose, "Output lots of debugging messages");
 
-/* Maps given VME window using configuration provided through module parameters or sysfs.
-   Two windows are supported:
-   - MAP_CR_CSR: CR/CSR space for bootloading the FPGA bitstream and initializing 
-     the VME64x CSR registers
-   - MAP_REG: the main VME window for the FMC driver. Configured via 
-     module parameters or sysfs.
-*/
+/* Maps given VME window using configuration provided through
+ * module parameters or sysfs.
+ * Two windows are supported:
+ * - MAP_CR_CSR: CR/CSR space for bootloading the FPGA bitstream and
+ *   initializing the VME64x CSR registers
+ * - MAP_REG: the main VME window for the FMC driver. Configured via
+ *   module parameters or sysfs.
+ */
 
 int svec_map_window(struct svec_dev *svec, enum svec_map_win map_type)
 {
@@ -94,7 +95,8 @@ int svec_map_window(struct svec_dev *svec, enum svec_map_win map_type)
 
 	svec->map[map_type] = kzalloc(sizeof(struct vme_mapping), GFP_KERNEL);
 	if (!svec->map[map_type]) {
-		dev_err(dev, "Cannot allocate memory for vme_mapping struct\n");
+		dev_err(dev,
+			"Cannot allocate memory for vme_mapping struct\n");
 		return -ENOMEM;
 	}
 
@@ -106,7 +108,8 @@ int svec_map_window(struct svec_dev *svec, enum svec_map_win map_type)
 	svec->map[map_type]->sizeu = 0;
 	svec->map[map_type]->sizel = size;
 
-	if ((rval = vme_find_mapping(svec->map[map_type], 1)) != 0) {
+	rval = vme_find_mapping(svec->map[map_type], 1);
+	if (rval != 0) {
 		dev_err(dev, "Failed to map window %d: (%d)\n",
 			(int)map_type, rval);
 		kfree(svec->map[map_type]);
@@ -114,10 +117,10 @@ int svec_map_window(struct svec_dev *svec, enum svec_map_win map_type)
 		return -EINVAL;
 	}
 
-	if(svec->verbose)
-	dev_info(dev, "%s mapping successful at 0x%p\n",
-		 map_type == MAP_REG ? "register" : "CR/CSR",
-		 svec->map[map_type]->kernel_va);
+	if (svec->verbose)
+		dev_info(dev, "%s mapping successful at 0x%p\n",
+			 map_type == MAP_REG ? "register" : "CR/CSR",
+			 svec->map[map_type]->kernel_va);
 
 	return 0;
 }
@@ -134,18 +137,20 @@ int svec_unmap_window(struct svec_dev *svec, enum svec_map_win map_type)
 		dev_err(dev, "Unmap for window %d failed\n", (int)map_type);
 		return -EINVAL;
 	}
-	
-	if(svec->verbose)
-	dev_info(dev, "Window %d unmapped\n", (int)map_type);
-	
+
+	if (svec->verbose)
+		dev_info(dev, "Window %d unmapped\n", (int)map_type);
+
 	kfree(svec->map[map_type]);
 	svec->map[map_type] = NULL;
 	return 0;
 }
 
-/* Checks if the card responds to a bootloader call in order to determine if
-   we are talking to a SVEC or not. If it is a SVEC, its Application FPGA is erased!
-*/
+/*
+ * Checks if the card responds to a bootloader call in order to determine if
+ * we are talking to a SVEC or not. If it is a SVEC, its Application FPGA
+ * is erased!
+ */
 int svec_check_bootloader_present(struct svec_dev *svec)
 {
 	int rv = 0;
@@ -167,7 +172,7 @@ int svec_check_bootloader_present(struct svec_dev *svec)
 		goto fail;
 	}
 
-      fail:
+fail:
 	svec_unmap_window(svec, MAP_CR_CSR);
 
 	return rv;
@@ -191,20 +196,23 @@ int svec_bootloader_unlock(struct svec_dev *svec)
 	}
 
 	addr = svec->map[MAP_CR_CSR]->kernel_va +
-	    SVEC_BASE_LOADER + XLDR_REG_BTRIGR;
+		SVEC_BASE_LOADER + XLDR_REG_BTRIGR;
 
 	/* Magic sequence: unlock bootloader mode, disable application FPGA */
 	for (i = 0; i < 8; i++)
 		iowrite32(cpu_to_be32(boot_seq[i]), addr);
 
-	if(svec->verbose)
-	dev_info(dev, "Wrote unlock sequence at %lx\n", (unsigned long)addr);
+	if (svec->verbose)
+		dev_info(dev, "Wrote unlock sequence at %lx\n",
+			 (unsigned long)addr);
 
 	return 0;
 }
 
-/* Checks if the SVEC is in bootloader mode. If true, it implies that the Appliocation
-   FPGA has no bitstream loaded. */
+/**
+ * Checks if the SVEC is in bootloader mode. If true, it implies that
+ * the Appliocation FPGA has no bitstream loaded.
+ */
 int svec_is_bootloader_active(struct svec_dev *svec)
 {
 	struct device *dev = svec->dev;
@@ -227,9 +235,8 @@ int svec_is_bootloader_active(struct svec_dev *svec)
 	strncpy(buf, (char *)&idc, 4);
 	buf[4] = 0;
 	if (strncmp(buf, "SVEC", 4) == 0) {
-		
-		if(svec->verbose)
-		    dev_info(dev, "IDCode value %x [%s].\n", idc, buf);
+		if (svec->verbose)
+			dev_info(dev, "IDCode value %x [%s].\n", idc, buf);
 		/* Bootloader active. Unlocked */
 		return 1;
 	}
@@ -244,9 +251,11 @@ static void svec_csr_write(u8 value, void *base, u32 offset)
 	iowrite32be(value, base + offset);
 }
 
-/* Loads the Application FPGA bitstream through the System FPGA bootloader. 
-   Does all necessary VME mappings & checks if the bitstream has not been already
-   loaded to save time. */
+/**
+ * Loads the Application FPGA bitstream through the System FPGA bootloader.
+ * Does all necessary VME mappings & checks if the bitstream has not been
+ * already loaded to save time.
+ */
 int svec_load_fpga(struct svec_dev *svec, const void *blob, int size)
 {
 	struct device *dev = svec->dev;
@@ -266,12 +275,12 @@ int svec_load_fpga(struct svec_dev *svec, const void *blob, int size)
 	/* Hash firmware bitstream */
 	fw_hash = jhash(blob, size, 0);
 	if (fw_hash == svec->fw_hash) {
-		if(svec->verbose)
-		    dev_info(svec->dev,
-			 "card already programmed with bitstream with hash 0x%x\n",
-			 fw_hash);
-    
-    		set_bit(SVEC_FLAG_AFPGA_PROGRAMMED, &svec->flags);
+		if (svec->verbose)
+			dev_info(svec->dev,
+				 "card already programmed with bitstream with hash 0x%x\n",
+				 fw_hash);
+
+		set_bit(SVEC_FLAG_AFPGA_PROGRAMMED, &svec->flags);
 		return 0;
 	}
 
@@ -341,8 +350,8 @@ int svec_load_fpga(struct svec_dev *svec, const void *blob, int size)
 		return -EINVAL;
 	}
 
-	if(svec->verbose)
-	dev_info(dev, "Bitstream loaded, status: OK\n");
+	if (svec->verbose)
+		dev_info(dev, "Bitstream loaded, status: OK\n");
 
 	/* give the VME bus control to App FPGA */
 	iowrite32(cpu_to_be32(XLDR_CSR_EXIT), loader_addr + XLDR_REG_CSR);
@@ -352,8 +361,11 @@ int svec_load_fpga(struct svec_dev *svec, const void *blob, int size)
 
 	set_bit(SVEC_FLAG_AFPGA_PROGRAMMED, &svec->flags);
 
-	/* after a successful reprogram, save the hash so that the future call can
-	   return earlier if requested to load the same bitstream */
+	/*
+	 * after a successful reprogram, save the hash so that the
+	 * future call can return earlier if requested to load the
+	 * same bitstream
+	 */
 	svec->fw_hash = fw_hash;
 
 	return 0;
@@ -372,8 +384,8 @@ static int svec_remove(struct device *pdev, unsigned int ndev)
 	svec_unmap_window(svec, MAP_REG);
 	svec_remove_sysfs_files(svec);
 
-	if(svec->verbose)
-	    dev_info(pdev, "removed\n");
+	if (svec->verbose)
+		dev_info(pdev, "removed\n");
 
 	kfree(svec);
 
@@ -398,9 +410,9 @@ int svec_load_fpga_file(struct svec_dev *svec, const char *name)
 		return err;
 	}
 
-	if(svec->verbose)
-	dev_info(dev, "Got file \"%s\", %zi (0x%zx) bytes\n",
-		 name, fw->size, fw->size);
+	if (svec->verbose)
+		dev_info(dev, "Got file \"%s\", %zi (0x%zx) bytes\n",
+			 name, fw->size, fw->size);
 
 	err = svec_load_fpga(svec, (uint32_t *) fw->data, fw->size);
 	release_firmware(fw);
@@ -408,7 +420,10 @@ int svec_load_fpga_file(struct svec_dev *svec, const char *name)
 	return err;
 }
 
-/* Checks if a SVEC with a valid Application FPGA gateware is present at a given slot. */
+/**
+ * Checks if a SVEC with a valid Application FPGA gateware is present
+ * at a given slot.
+ */
 int svec_is_present(struct svec_dev *svec)
 {
 	struct device *dev = svec->dev;
@@ -416,9 +431,8 @@ int svec_is_present(struct svec_dev *svec)
 	void *addr;
 
 	/* Check for bootloader */
-	if (svec_is_bootloader_active(svec)) {
+	if (svec_is_bootloader_active(svec))
 		return 1;
-	}
 
 	/* Ok, maybe there is a svec, but bootloader is not active.
 	   In such case, a CR/CSR with a valid manufacturer ID should exist */
@@ -430,8 +444,8 @@ int svec_is_present(struct svec_dev *svec)
 	idc += be32_to_cpu(ioread32(addr + 8));
 
 	if (idc == SVEC_VENDOR_ID) {
-		if(svec->verbose)
-		dev_info(dev, "vendor ID is 0x%08x\n", idc);
+		if (svec->verbose)
+			dev_info(dev, "vendor ID is 0x%08x\n", idc);
 		return 1;
 	}
 
@@ -442,7 +456,10 @@ int svec_is_present(struct svec_dev *svec)
 	return 0;
 }
 
-/* Sets up the VME64x core to respond to a address range and issue interrupts to given vector. */
+/*
+ * Sets up the VME64x core to respond to a address range and
+ * issue interrupts to given vector.
+ */
 
 int svec_setup_csr(struct svec_dev *svec)
 {
@@ -453,7 +470,7 @@ int svec_setup_csr(struct svec_dev *svec)
 
 	/* don't try to set up CSRs of an empty AFPGA */
 	if (!test_bit(SVEC_FLAG_AFPGA_PROGRAMMED, &svec->flags))
-	    return 0;
+		return 0;
 
 	if (!svec->map[MAP_CR_CSR])
 		rv = svec_map_window(svec, MAP_CR_CSR);
@@ -483,7 +500,8 @@ int svec_setup_csr(struct svec_dev *svec)
 	svec_csr_write(svec->cfg_cur.interrupt_level, base, INT_LEVEL);
 
 	switch (svec->cfg_cur.vme_am) {
-		/* choose the function to use: A32 is 0, A24 is 1. The rest is purposedly disabled. */
+		/* choose the function to use: A32 is 0, A24 is 1.
+		   The rest is purposedly disabled. */
 	case VME_A32_USER_DATA_SCT:
 		func = 0;
 		break;
@@ -496,13 +514,16 @@ int svec_setup_csr(struct svec_dev *svec)
 
 	memset(ader, 0, sizeof(ader));
 
-	/* Below is a hack to keep the VME core function disabling work on bitstreams
-	   containing a buggy VME core (commit b2fc3ce7): set bit 0 (XAM_MODE) to 1
-	   to disable given function (because neither function 0 nor 1 have anything 
-	   in their extended capability sets, setting XAM_MODE = 1 effectively disables 
-	   the function. */
+	/*
+	 * Below is a hack to keep the VME core function disabling
+	 * work on bitstreams containing a buggy VME core
+	 * (commit b2fc3ce7): set bit 0 (XAM_MODE) to 1 to disable
+	 * given function (because neither function 0 nor 1 have anything
+	 * in their extended capability sets, setting XAM_MODE = 1
+	 * effectively disables the function.
+	 */
 
-	ader[0][3] = 1; 
+	ader[0][3] = 1;
 	ader[1][3] = 1;
 
 	/* do address relocation for FUN0/1 */
@@ -511,7 +532,8 @@ int svec_setup_csr(struct svec_dev *svec)
 	ader[func][2] = (svec->cfg_cur.vme_base >> 8) & 0xFF;
 	ader[func][3] = (svec->cfg_cur.vme_am & 0x3F) << 2;
 
-	/* DFSR and XAM are zero. Program both functions, but only one will be enabled. */
+	/* DFSR and XAM are zero. Program both functions,
+	   but only one will be enabled. */
 	svec_csr_write(ader[0][0], base, FUN0ADER);
 	svec_csr_write(ader[0][1], base, FUN0ADER + 4);
 	svec_csr_write(ader[0][2], base, FUN0ADER + 8);
@@ -525,28 +547,32 @@ int svec_setup_csr(struct svec_dev *svec)
 	/* enable module, hence make FUN0/1 available */
 	svec_csr_write(ENABLE_CORE, base, BIT_SET_REG);
 
-      exit_reconf:
+exit_reconf:
 
-	/* unmap the CSR window after configuring the card, it's no longer necessary */
+	/* unmap the CSR window after configuring the card, it's
+	   no longer necessary */
 	svec_unmap_window(svec, MAP_CR_CSR);
 	return rv;
 }
 
-/* Performs some checks on VME window address/size/am and interrupts configuration.
-   Note that the checks are not rock solid (no checking for overlapping VME windows
-   for instance), so it's still possible for a determinate user to screw something up. */
+/**
+ * Performs some checks on VME window address/size/am and interrupts
+ * configuration. Note that the checks are not rock solid (no checking
+ * for overlapping VME windows for instance), so it's still possible for
+ * a determinate user to screw something up.
+ */
 int svec_validate_configuration(struct device *pdev, struct svec_config *cfg)
 {
 	uint32_t addr_mask, start_masked, end_masked;
 	uint32_t max_size;
 
 	/* no base address assigned? silently return. */
-	if (cfg->vme_base == (uint32_t) - 1)
+	if (cfg->vme_base == (uint32_t) -1)
 		return 0;
 
-	if (cfg->interrupt_vector == (uint32_t) - 1) 
+	if (cfg->interrupt_vector == (uint32_t) -1)
 		return 0;
-	
+
 	switch (cfg->vme_am) {
 	case VME_A32_USER_DATA_SCT:
 		addr_mask = 0xff000000;
@@ -563,12 +589,9 @@ int svec_validate_configuration(struct device *pdev, struct svec_config *cfg)
 	}
 
 	if (cfg->vme_am == VME_A24_USER_DATA_SCT &&
-	    cfg->vme_base >= 0xf00000)
-	{
+	    cfg->vme_base >= 0xf00000) {
 		dev_err(pdev,
-			"VME base address for A24 mode must not be >= 0xf00000 due to "
-			"addressing conflict with the Tsi148 VME bridge. Please change "
-			"your card's configuration.\n");
+			"VME base address for A24 mode must not be >= 0xf00000 due to addressing conflict with the Tsi148 VME bridge. Please change your card's configuration.\n");
 		return 0;
 	}
 
@@ -627,22 +650,26 @@ static void svec_prepare_description(struct svec_dev *svec)
 	dev_info(svec->dev, "%s\n", svec->description);
 }
 
-/* Reconfigures everything after the VME configuration has been changed. Called during 
-   probing of the card (if sufficient VME config is given via module parameters) or when the
-   configuration is assigned through sysfs. Reconfiguration implies re-loading the FMCs. */
+/**
+ * Reconfigures everything after the VME configuration has been changed.
+ * Called during probing of the card (if sufficient VME config is given
+ * via module parameters) or when the configuration is assigned through
+ * sysfs. Reconfiguration implies re-loading the FMCs.
+ */
 int svec_reconfigure(struct svec_dev *svec)
 {
 	int error;
 
-	/* no valid VME configuration? Silently return (it has to be done at some point via sysfs) */
+	/* no valid VME configuration? Silently return (it has to be done
+	   at some point via sysfs) */
 	if (!svec->cfg_cur.configured)
 		return 0;
 
 	/* FMCs loaded: remove before reconfiguring VME */
 	if (test_bit(SVEC_FLAG_FMCS_REGISTERED, &svec->flags)) {
-		if(svec->verbose)
-		dev_info(svec->dev,
-			 "re-registering FMCs due to sysfs-triggered card reconfiguration\n");
+		if (svec->verbose)
+			dev_info(svec->dev,
+				 "re-registering FMCs due to sysfs-triggered card reconfiguration\n");
 		svec_fmc_destroy(svec);
 		clear_bit(SVEC_FLAG_FMCS_REGISTERED, &svec->flags);
 	}
@@ -673,7 +700,7 @@ int svec_reconfigure(struct svec_dev *svec)
 	}
 
 	return 0;
-      failed_unmap:
+failed_unmap:
 	svec_unmap_window(svec, MAP_REG);
 	return error;
 }
@@ -738,9 +765,7 @@ static int svec_probe(struct device *pdev, unsigned int ndev)
 	/* see if we are really talking to a SVEC */
 	if (svec_check_bootloader_present(svec) < 0) {
 		dev_err(pdev,
-			"ERROR: The SVEC expected in slot %d is not responding, "
-			"the mezzanines installed on it will not be visible in the" 
-			"system. Please check if the card is correctly installed.\n",
+			"ERROR: The SVEC expected in slot %d is not responding, the mezzanines installed on it will not be visible in the system. Please check if the card is correctly installed.\n",
 			svec->slot);
 
 		error = -ENODEV;
@@ -748,16 +773,16 @@ static int svec_probe(struct device *pdev, unsigned int ndev)
 	}
 
 	/* Get firmware name */
-	if (ndev < fw_name_num) {
+	if (ndev < fw_name_num)
 		svec->fw_name = fw_name[ndev];
-	} else {
+	else
 		svec->fw_name = svec_fw_name;	/* Default value */
-	}
 
-	if(svec->verbose)
-	    dev_info(pdev, "using '%s' golden bitstream.", svec->fw_name);
+	if (svec->verbose)
+		dev_info(pdev, "using '%s' golden bitstream.",
+			 svec->fw_name);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,29)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 29)
 	name = pdev->bus_id;
 #else
 	name = dev_name(pdev);
@@ -791,7 +816,7 @@ static struct vme_driver svec_driver = {
 	.remove = svec_remove,
 	.driver = {
 		   .name = KBUILD_MODNAME,
-		   },
+	},
 };
 
 static int __init svec_init(void)
@@ -818,8 +843,7 @@ static int __init svec_init(void)
 	error |= (fw_name_num && fw_name_num != slot_num);
 
 	if (error) {
-		pr_err
-		    ("%s: The number of vme_base/vme_am/vme_size/level/vector/fw_name/use_vic/use_fmc parameters must be zero or equal to the number of cards.\n",
+		pr_err("%s: The number of vme_base/vme_am/vme_size/level/vector/fw_name/use_vic/use_fmc parameters must be zero or equal to the number of cards.\n",
 		     __func__);
 		return -EINVAL;
 	}
