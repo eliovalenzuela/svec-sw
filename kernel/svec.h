@@ -76,6 +76,7 @@ struct svec_dev {
 	struct miscdevice mdev;
 
 	struct fmc_device *fmcs[SVEC_N_SLOTS];
+	struct fmc_device *fmc_wrnc; /* HACK: REMOVE ME when we move to SDB-bus */
 	irq_handler_t fmc_handlers[SVEC_N_SLOTS];
 
 	/* FMC devices */

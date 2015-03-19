@@ -19,6 +19,7 @@ static int svec_show_sdb;
 module_param_named(show_sdb, svec_show_sdb, int, 0444);
 
 /* The main role of this file is offering the fmc_operations for the svec */
+static struct fmc_operations svec_fmc_operations;
 
 static uint32_t svec_readl(struct fmc_device *fmc, int offset)
 {
@@ -33,6 +34,7 @@ static void svec_writel(struct fmc_device *fmc, uint32_t val, int offset)
 {
 	iowrite32be(val, fmc->fpga_base + offset);
 }
+
 
 static int svec_reprogram_raw(struct fmc_device *fmc, struct fmc_driver *drv,
 			      void *gw, unsigned long len)
@@ -65,6 +67,92 @@ static int svec_reprogram_raw(struct fmc_device *fmc, struct fmc_driver *drv,
 	svec_setup_csr(svec);
 
 	fmc->flags |= FMC_DEVICE_HAS_CUSTOM;
+	return 0;
+}
+
+#define WRNC_EEPROM_SIZE		8192	/* The standard eeprom size */
+static const char wrnc_eeimg[WRNC_EEPROM_SIZE] = {
+	0x01, 0x00, 0x00, 0x01, 0x00, 0x0a, 0x00, 0xf4, 0x01, 0x09, 0x00, 0xd9,
+	0x99, 0x97, 0xc4, 0x63, 0x65, 0x72, 0x6e, 0xcc, 0x77, 0x72, 0x2d, 0x6e,
+	0x6f, 0x64, 0x65, 0x2d, 0x63, 0x6f, 0x72, 0x65, 0xc4, 0x30, 0x30, 0x30,
+	0x31, 0xcb, 0x73, 0x61, 0x6d, 0x70, 0x6c, 0x65, 0x2d, 0x70, 0x61, 0x72,
+	0x74, 0xda, 0x32, 0x30, 0x31, 0x34, 0x2d, 0x31, 0x31, 0x2d, 0x32, 0x31,
+	0x20, 0x31, 0x32, 0x3a, 0x34, 0x31, 0x3a, 0x33, 0x37, 0x2e, 0x37, 0x31,
+	0x31, 0x39, 0x31, 0x31, 0xc1, 0x00, 0x00, 0xc4, 0x02, 0x02, 0x0d, 0xf7,
+	0xf8, 0x02, 0xb0, 0x04, 0x74, 0x04, 0xec, 0x04, 0x00, 0x00, 0x00, 0x00,
+	0xe8, 0x03, 0x02, 0x02, 0x0d, 0x5c, 0x93, 0x01, 0x4a, 0x01, 0x39, 0x01,
+	0x5a, 0x01, 0x00, 0x00, 0x00, 0x00, 0xb8, 0x0b, 0x02, 0x02, 0x0d, 0x63,
+	0x8c, 0x00, 0xfa, 0x00, 0xed, 0x00, 0x06, 0x01, 0x00, 0x00, 0x00, 0x00,
+	0xa0, 0x0f, 0x01, 0x02, 0x0d, 0xfb, 0xf5, 0x05, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x0d, 0xfc,
+	0xf4, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x01, 0x02, 0x0d, 0xfd, 0xf3, 0x03, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xfa, 0x82, 0x0b, 0xea,
+	0x8f, 0xa2, 0x12, 0x00, 0x00, 0x1e, 0x44, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+};
+
+static int svec_create_wrnc(struct svec_dev *svec)
+{
+	struct vme_dev *vme = to_vme_dev(svec->dev);
+	struct fmc_device *fmc;
+	int ret, err, i;
+
+	if (svec->fmc_wrnc) {
+		dev_err(svec->dev, "WhiteRebbit NodeCore aldready exists\n");
+		return -EBUSY;
+	}
+
+	for (i = 0; i < SVEC_N_SLOTS; ++i) {
+		ret = fmc_scan_sdb_tree(svec->fmcs[i], 0x0);
+		if (ret >= 0 || ret == -EBUSY)
+		        break;
+	}
+
+	/* Look for the WhiteRabbit NodeCore component and create a device
+	   based of FMC device on virtual slot 2 */
+        ret = fmc_find_sdb_device(svec->fmcs[i]->sdb, 0xCE42, 0x90DE, NULL);
+	if (ret < 0)
+		return ret;
+
+	fmc = kzalloc(sizeof(*fmc), GFP_KERNEL);
+	if (!fmc) {
+		dev_err(svec->dev,
+			"cannot allocate fmc slot for White-Rabbit Node-Core\n");
+		return -ENOMEM;
+	}
+
+	fmc->version = FMC_VERSION;
+	fmc->carrier_name = "SVEC";
+	fmc->carrier_data = svec;
+	fmc->owner = THIS_MODULE;
+
+	fmc->fpga_base = svec->map[MAP_REG]->kernel_va;
+
+	fmc->irq = 0;		/*TO-DO */
+	fmc->op = &svec_fmc_operations;
+	fmc->hwdev = svec->dev;	/* for messages */
+
+	fmc->slot_id = SVEC_N_SLOTS; /* Yes, is a virtual FMC slot, so
+					outside SVEC slot enumeration */
+	fmc->device_id = (vme->slot << 6) | fmc->slot_id;
+
+	/* Overwrite with the white rabbit fake eeprom */
+	fmc->eeprom_len = WRNC_EEPROM_SIZE;
+	fmc->eeprom = wrnc_eeimg;
+	fmc->eeprom_addr = 0x50 + 2 * fmc->slot_id;
+	fmc->memlen = svec->cfg_cur.vme_size;
+
+	fmc->flags &= ~FMC_DEVICE_HAS_GOLDEN;
+	fmc->flags |= FMC_DEVICE_HAS_CUSTOM;
+
+	err = fmc_device_register(fmc);
+	if (err){
+		dev_err(svec->dev, "Cannot register White-Rabbit Node-Core\n");
+		return err;
+	}
+
+	svec->fmc_wrnc = fmc;
 
 	return 0;
 }
@@ -110,6 +198,7 @@ static int svec_reprogram(struct fmc_device *fmc, struct fmc_driver *drv,
 	release_firmware(fw);
 	if (ret < 0)
 		dev_err(dev, "svec reprogram failed while loading %s\n", gw);
+
 	return ret;
 }
 
@@ -274,6 +363,9 @@ int svec_fmc_create(struct svec_dev *svec, struct fmc_gateware *gw)
 		dev_err(svec->dev, "Error registering fmc devices\n");
 		goto failed;
 	}
+
+	svec_create_wrnc(svec);
+
 	/* FIXME: how do we retrieve the actual number of registered
 	 * devices?
 	 */
@@ -298,6 +390,9 @@ failed:
 
 void svec_fmc_destroy(struct svec_dev *svec)
 {
+	if (svec->fmc_wrnc)
+		fmc_device_unregister(svec->fmc_wrnc);
+
 	if (!svec->fmcs[0])
 		return;
 
