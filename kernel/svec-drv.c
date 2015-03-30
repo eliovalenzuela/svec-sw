@@ -656,7 +656,7 @@ static void svec_prepare_description(struct svec_dev *svec)
  * via module parameters) or when the configuration is assigned through
  * sysfs. Reconfiguration implies re-loading the FMCs.
  */
-int svec_reconfigure(struct svec_dev *svec)
+int svec_reconfigure(struct svec_dev *svec, struct fmc_gateware *gw)
 {
 	int error;
 
@@ -691,7 +691,7 @@ int svec_reconfigure(struct svec_dev *svec)
 
 	/* FMC initialization enabled? Start up the FMC drivers. */
 	if (svec->cfg_cur.use_fmc) {
-		error = svec_fmc_create(svec);
+		error = svec_fmc_create(svec, gw);
 		if (error) {
 			dev_err(svec->dev, "error creating fmc devices\n");
 			goto failed_unmap;
@@ -801,7 +801,7 @@ static int svec_probe(struct device *pdev, unsigned int ndev)
 	}
 
 	/* Map user address space & give control to the FMCs */
-	svec_reconfigure(svec);
+	svec_reconfigure(svec, NULL);
 
 	return 0;
 

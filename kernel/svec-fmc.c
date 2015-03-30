@@ -33,6 +33,41 @@ static void svec_writel(struct fmc_device *fmc, uint32_t val, int offset)
 	iowrite32be(val, fmc->fpga_base + offset);
 }
 
+static int svec_reprogram_raw(struct fmc_device *fmc, struct fmc_driver *drv,
+			      void *gw, unsigned long len)
+{
+	struct svec_dev *svec = fmc->carrier_data;
+	struct device *dev = fmc->hwdev;
+	int ret;
+
+	if (!gw || !len) {
+		dev_err(dev, "Invalid firmware buffer - buf: %p len: %ld\n",
+			gw, len);
+		return -EINVAL;
+	}
+
+	if (!drv)
+		dev_info(dev, "Carrier FPGA re-program\n");
+
+	fmc_free_sdb_tree(fmc);
+
+	fmc->flags &= ~FMC_DEVICE_HAS_GOLDEN;
+
+	/* load the firmware */
+	ret = svec_load_fpga(svec, gw, len);
+	if (ret < 0) {
+		dev_err(dev, "error %i programming firmware\n", ret);
+		return ret;
+	}
+
+	/* Configure & activate CSR functions depending on chosen AM */
+	svec_setup_csr(svec);
+
+	fmc->flags |= FMC_DEVICE_HAS_CUSTOM;
+
+	return 0;
+}
+
 static int svec_reprogram(struct fmc_device *fmc, struct fmc_driver *drv,
 			  char *gw)
 {
@@ -67,23 +102,10 @@ static int svec_reprogram(struct fmc_device *fmc, struct fmc_driver *drv,
 		dev_warn(dev, "request firmware \"%s\": error %i\n", gw, ret);
 		return ret;
 	}
-	fmc_free_sdb_tree(fmc);
 
-	fmc->flags &= ~FMC_DEVICE_HAS_GOLDEN;
+	/* Re-Program FPGA */
+	ret = svec_reprogram_raw(fmc, drv, (void *)fw->data, fw->size);
 
-	/* load the firmware */
-	ret = svec_load_fpga(svec, fw->data, fw->size);
-	if (ret < 0) {
-		dev_err(dev, "error %i programming firmware \"%s\"\n", ret, gw);
-		goto out;
-	}
-
-	/* Configure & activate CSR functions depending on chosen AM */
-	svec_setup_csr(svec);
-
-	fmc->flags |= FMC_DEVICE_HAS_CUSTOM;
-
-out:
 	release_firmware(fw);
 	if (ret < 0)
 		dev_err(dev, "svec reprogram failed while loading %s\n", gw);
@@ -120,6 +142,7 @@ static int svec_write_ee(struct fmc_device *fmc, int pos,
 static struct fmc_operations svec_fmc_operations = {
 	.read32 = svec_readl,
 	.write32 = svec_writel,
+	.reprogram_raw = svec_reprogram_raw,
 	.reprogram = svec_reprogram,
 	.irq_request = svec_irq_request,
 	.irq_ack = svec_irq_ack,
@@ -231,7 +254,7 @@ int svec_fmc_prepare(struct svec_dev *svec, unsigned int fmc_slot)
 	return ret;
 }
 
-int svec_fmc_create(struct svec_dev *svec)
+int svec_fmc_create(struct svec_dev *svec, struct fmc_gateware *gw)
 {
 	int i;
 	int error = 0;
@@ -244,7 +267,7 @@ int svec_fmc_create(struct svec_dev *svec)
 	}
 
 	/* fmc device creation */
-	error = fmc_device_register_n(svec->fmcs, svec->fmcs_n);
+	error = fmc_device_register_n_gw(svec->fmcs, svec->fmcs_n, gw);
 	if (error) {
 		dev_err(svec->dev, "Error registering fmc devices\n");
 		goto failed;
