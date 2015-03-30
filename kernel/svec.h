@@ -10,6 +10,7 @@
 #ifndef __SVEC_H__
 #define __SVEC_H__
 
+#include <linux/miscdevice.h>
 #include <linux/firmware.h>
 #include <linux/fmc.h>
 #include "vmebus.h"
@@ -74,6 +75,7 @@ struct svec_dev {
 	uint32_t fw_hash;
 	struct vme_mapping *map[__MAX_MAP];
 	struct svec_config cfg_cur, cfg_new;
+	struct miscdevice mdev;
 
 	struct fmc_device *fmcs[SVEC_N_SLOTS];
 	irq_handler_t fmc_handlers[SVEC_N_SLOTS];
