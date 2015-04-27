@@ -57,22 +57,23 @@ static int svec_fw_cmd_reset(struct svec_dev *card)
 
 static int svec_fw_cmd_program(struct svec_dev *card)
 {
-	int err;
+	struct fmc_gateware gw = {card->fw_buffer, card->fw_length};
+	int err = 0;
 
 	if (!card->fw_buffer || !card->fw_length)
 		return -EINVAL;
 
 	err = svec_load_fpga(card, card->fw_buffer, card->fw_length);
-
-	vfree(card->fw_buffer);
+	if (err)
+		goto out;
 
 	card->fw_buffer = NULL;
 	card->fw_length = 0;
-	if (err < 0)
-		return err;
 
-	svec_reconfigure(card);
-	return 0;
+	svec_reconfigure(card, &gw);
+out:
+	vfree(card->fw_buffer);
+	return err;
 }
 
 
@@ -401,7 +402,7 @@ ATTR_STORE_CALLBACK(configured)
 	card->cfg_new.configured = 1;
 	card->cfg_cur = card->cfg_new;
 
-	error = svec_reconfigure(card);
+	error = svec_reconfigure(card, NULL);
 
 	if (error)
 		return error;

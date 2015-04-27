@@ -10,6 +10,7 @@
 #ifndef __SVEC_H__
 #define __SVEC_H__
 
+#include <linux/miscdevice.h>
 #include <linux/firmware.h>
 #include <linux/fmc.h>
 #include "vmebus.h"
@@ -74,6 +75,7 @@ struct svec_dev {
 	uint32_t fw_hash;
 	struct vme_mapping *map[__MAX_MAP];
 	struct svec_config cfg_cur, cfg_new;
+	struct miscdevice mdev;
 
 	struct fmc_device *fmcs[SVEC_N_SLOTS];
 	irq_handler_t fmc_handlers[SVEC_N_SLOTS];
@@ -104,7 +106,7 @@ extern int svec_map_window(struct svec_dev *svec, enum svec_map_win map_type);
 extern char *svec_fw_name;
 
 /* Functions in svec-fmc.c, used by svec-vme.c */
-extern int svec_fmc_create(struct svec_dev *svec);
+extern int svec_fmc_create(struct svec_dev *svec, struct fmc_gateware *gw);
 extern void svec_fmc_destroy(struct svec_dev *svec);
 
 /* Functions in svec-i2c.c, used by svec-fmc.c */
@@ -138,7 +140,7 @@ int svec_dma_read(struct svec_dev *svec, uint32_t addr, int am, size_t size,
 		  void *buf, int is_fifo);
 
 
-int svec_reconfigure(struct svec_dev *svec);
+int svec_reconfigure(struct svec_dev *svec, struct fmc_gateware *gw);
 int svec_setup_csr(struct svec_dev *svec);
 
 int svec_validate_configuration(struct device *pdev, struct svec_config *cfg);

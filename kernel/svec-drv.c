@@ -16,6 +16,7 @@
 #include <linux/firmware.h>
 #include <linux/delay.h>
 #include <linux/jhash.h>
+#include <linux/fmc-sdb.h>
 #include "svec.h"
 #include "hw/xloader_regs.h"
 
@@ -39,6 +40,8 @@ static unsigned int vme_am_num;
 static int vme_size[SVEC_MAX_DEVICES] = SVEC_DEFAULT_VME_SIZE;
 static unsigned int vme_size_num;
 static int verbose;
+
+static void svec_destroy_misc_device(struct svec_dev *svec);
 
 module_param_array(slot, int, &slot_num, S_IRUGO);
 MODULE_PARM_DESC(slot, "Slot where SVEC card is installed");
@@ -382,6 +385,7 @@ static int svec_remove(struct device *pdev, unsigned int ndev)
 
 	svec_unmap_window(svec, MAP_CR_CSR);
 	svec_unmap_window(svec, MAP_REG);
+	svec_destroy_misc_device(svec);
 	svec_remove_sysfs_files(svec);
 
 	if (svec->verbose)
@@ -656,7 +660,7 @@ static void svec_prepare_description(struct svec_dev *svec)
  * via module parameters) or when the configuration is assigned through
  * sysfs. Reconfiguration implies re-loading the FMCs.
  */
-int svec_reconfigure(struct svec_dev *svec)
+int svec_reconfigure(struct svec_dev *svec, struct fmc_gateware *gw)
 {
 	int error;
 
@@ -691,7 +695,7 @@ int svec_reconfigure(struct svec_dev *svec)
 
 	/* FMC initialization enabled? Start up the FMC drivers. */
 	if (svec->cfg_cur.use_fmc) {
-		error = svec_fmc_create(svec);
+		error = svec_fmc_create(svec, gw);
 		if (error) {
 			dev_err(svec->dev, "error creating fmc devices\n");
 			goto failed_unmap;
@@ -722,6 +726,73 @@ int svec_load_golden(struct svec_dev *svec)
 
 	return 0;
 }
+
+
+/* * * * * * MISC DEVICE * * * * * */
+static int svec_mdev_simple_open(struct inode *inode, struct file *file)
+{
+	struct miscdevice *mdev_ptr = file->private_data;
+
+	file->private_data = container_of(mdev_ptr, struct svec_dev, mdev);
+
+	return 0;
+}
+
+
+static ssize_t svec_mdev_write_raw(struct file *f, const char __user *buf,
+				   size_t count, loff_t *offp)
+{
+	struct svec_dev *svec = f->private_data;
+	struct fmc_gateware gw;
+	int err = 0;
+
+	if (!count)
+		return -EINVAL;
+
+	/* Copy FPGA bitstream to kernel space */
+	gw.len = count;
+	gw.bitstream = vmalloc(count);
+	if (!gw.bitstream)
+		return -ENOMEM;
+	if (copy_from_user(gw.bitstream, buf, gw.len)) {
+		err = -EFAULT;
+		goto out;
+	}
+
+	/* Program FPGA */
+	err = svec_reconfigure(svec, &gw);
+	if (err)
+		dev_err(svec->dev,
+			"Manually program FPGA bitstream from buffer: fail\n");
+	else
+		dev_info(svec->dev,
+			 "Manually program FPGA bitstream from buffer: success\n");
+out:
+	vfree(gw.bitstream);
+	return err ? err : count;
+}
+
+static const struct file_operations svec_fops = {
+	.owner = THIS_MODULE,
+	.open = svec_mdev_simple_open,
+	.write  = svec_mdev_write_raw,
+};
+
+static int svec_create_misc_device(struct svec_dev *svec)
+{
+	svec->mdev.minor = MISC_DYNAMIC_MINOR;
+	svec->mdev.fops = &svec_fops;
+	svec->mdev.name = svec->name;
+
+	return misc_register(&svec->mdev);
+}
+
+static void svec_destroy_misc_device(struct svec_dev *svec)
+{
+	misc_deregister(&svec->mdev);
+}
+/* * * * * * END MISC DEVICE * * * * */
+
 
 static int svec_probe(struct device *pdev, unsigned int ndev)
 {
@@ -800,11 +871,19 @@ static int svec_probe(struct device *pdev, unsigned int ndev)
 		goto failed;
 	}
 
+	error = svec_create_misc_device(svec);
+	if (error) {
+		dev_err(pdev, "Error creating misc device\n");
+		goto failed_misc;
+	}
+
 	/* Map user address space & give control to the FMCs */
-	svec_reconfigure(svec);
+	svec_reconfigure(svec, NULL);
 
 	return 0;
 
+failed_misc:
+	svec_remove_sysfs_files(svec);
 failed:
 	kfree(svec);
 
