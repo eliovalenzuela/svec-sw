@@ -81,21 +81,6 @@ int svec_irq_request(struct fmc_device *fmc, irq_handler_t handler,
 	} else
 		return -EINVAL;
 
-	/*
-	 * register the master VME handler the first time somebody
-	 * requests an interrupt
-	 */
-	if (!rv && !test_bit(SVEC_FLAG_IRQS_REQUESTED, &svec->flags)) {
-
-		rv = vme_request_irq(svec->cfg_cur.interrupt_vector,
-				     svec_irq_handler, (void *)svec,
-				     svec->name);
-		svec->current_vector = svec->cfg_cur.interrupt_vector;
-
-		if (!rv)
-			set_bit(SVEC_FLAG_IRQS_REQUESTED, &svec->flags);
-	}
-
 	return rv;
 }
 
@@ -124,17 +109,27 @@ int svec_irq_free(struct fmc_device *fmc)
 		spin_unlock(&svec->irq_lock);
 	}
 
-	/*
-	 * shared IRQ mode: disable VME interrupt when freeing last
-	 * FMC handler
-	 */
-	if (!svec->vic && !svec->fmc_handlers[0] && !svec->fmc_handlers[1]) {
-		rv = vme_free_irq(svec->current_vector);
-		if (rv < 0)
-			return rv;
-
-		clear_bit(SVEC_FLAG_IRQS_REQUESTED, &svec->flags);
-	}
-
 	return 0;
+}
+
+int svec_irq_init(struct svec_dev *svec)
+{
+	int rv;
+
+	rv = vme_request_irq(svec->cfg_cur.interrupt_vector,
+			     svec_irq_handler, (void *)svec,
+			     svec->name);
+	svec->current_vector = svec->cfg_cur.interrupt_vector;
+
+	return rv;
+}
+
+void svec_irq_exit(struct svec_dev *svec)
+{
+	int rv;
+
+	rv = vme_free_irq(svec->current_vector);
+	if (rv < 0)
+		dev_err(svec->dev, "Error while freeing the VME irq (%d)\n",
+			rv);
 }
