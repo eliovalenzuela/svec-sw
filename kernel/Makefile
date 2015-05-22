@@ -17,7 +17,7 @@ ccflags-y += -DDEBUG
 ccflags-y += -DGIT_VERSION=\"$(GIT_VERSION)\"
 
 KBUILD_EXTRA_SYMBOLS += $(obj)/Module.symvers.vme
-KBUILD_EXTRA_SYMBOLS += $(obj)/Module.symvers.fmc
+KBUILD_EXTRA_SYMBOLS += $(FMC_BUS)/kernel/Module.symvers
 
 obj-m := svec.o
 
