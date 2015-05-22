@@ -378,6 +378,7 @@ static int svec_remove(struct device *pdev, unsigned int ndev)
 {
 	struct svec_dev *svec = dev_get_drvdata(pdev);
 
+	svec_irq_exit(svec);
 	if (test_bit(SVEC_FLAG_FMCS_REGISTERED, &svec->flags)) {
 		svec_fmc_destroy(svec);
 		clear_bit(SVEC_FLAG_FMCS_REGISTERED, &svec->flags);
@@ -704,7 +705,9 @@ int svec_reconfigure(struct svec_dev *svec, struct fmc_gateware *gw)
 	}
 
 	return 0;
+
 failed_unmap:
+	svec_unmap_window(svec, MAP_CR_CSR);
 	svec_unmap_window(svec, MAP_REG);
 	return error;
 }
@@ -878,10 +881,22 @@ static int svec_probe(struct device *pdev, unsigned int ndev)
 	}
 
 	/* Map user address space & give control to the FMCs */
-	svec_reconfigure(svec, NULL);
+	error = svec_reconfigure(svec, NULL);
+	if (error)
+		goto failed_config;
+
+	error = svec_irq_init(svec);
+	if (error)
+		goto failed_irq;
 
 	return 0;
 
+failed_irq:
+	svec_fmc_destroy(svec);
+	svec_unmap_window(svec, MAP_CR_CSR);
+	svec_unmap_window(svec, MAP_REG);
+failed_config:
+	svec_destroy_misc_device(svec);
 failed_misc:
 	svec_remove_sysfs_files(svec);
 failed:

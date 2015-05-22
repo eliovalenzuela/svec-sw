@@ -49,6 +49,8 @@ static int svec_reprogram_raw(struct fmc_device *fmc, struct fmc_driver *drv,
 	if (!drv)
 		dev_info(dev, "Carrier FPGA re-program\n");
 
+	spec_ht_vic_exit(svec);
+
 	fmc_free_sdb_tree(fmc);
 
 	fmc->flags &= ~FMC_DEVICE_HAS_GOLDEN;
@@ -64,6 +66,12 @@ static int svec_reprogram_raw(struct fmc_device *fmc, struct fmc_driver *drv,
 	svec_setup_csr(svec);
 
 	fmc->flags |= FMC_DEVICE_HAS_CUSTOM;
+
+	svec_ht_vic_init(svec);
+
+	/* HACK: fmc-bus is expecting an empty SDB and is rising error
+	   if it already exists */
+	fmc_free_sdb_tree(fmc);
 
 	return 0;
 }
@@ -295,10 +303,6 @@ void svec_fmc_destroy(struct svec_dev *svec)
 		return;
 
 	fmc_device_unregister_n(svec->fmcs, svec->fmcs_n);
-
-	WARN(test_bit(SVEC_FLAG_IRQS_REQUESTED, &svec->flags) || svec->vic,
-	     "A Mezzanine driver didn't release all its IRQ handlers (VIC %p, FLAG 0x%lx)\n",
-	     svec->vic, svec->flags);
 	memset(svec->fmcs, 0, sizeof(struct fmc_devices *) * SVEC_N_SLOTS);
 
 	if (svec->verbose)

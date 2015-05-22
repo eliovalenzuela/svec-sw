@@ -10,6 +10,7 @@
 #ifndef __SVEC_H__
 #define __SVEC_H__
 
+#include <linux/platform_device.h>
 #include <linux/miscdevice.h>
 #include <linux/firmware.h>
 #include <linux/fmc.h>
@@ -86,7 +87,7 @@ struct svec_dev {
 	unsigned int current_vector;
 	spinlock_t irq_lock;
 
-	struct vic_irq_controller *vic;
+	struct platform_device vic;
 	uint32_t vme_raw_addr;	/* VME address for raw VME I/O through vme_addr/vme_data attributes */
 	int verbose;
 
@@ -160,6 +161,9 @@ int svec_irq_request(struct fmc_device *fmc, irq_handler_t handler, char *name,
 		     int flags);
 void svec_irq_ack(struct fmc_device *fmc);
 int svec_irq_free(struct fmc_device *fmc);
+int svec_has_ht_vic(struct svec_dev *svec);
+int svec_ht_vic_init(struct svec_dev *svec);
+void spec_ht_vic_exit(struct svec_dev *svec);
 
 #endif /* __SVEC_H__ */
 

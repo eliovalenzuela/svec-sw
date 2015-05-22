@@ -2,6 +2,7 @@ LINUX ?= /lib/modules/$(shell uname -r)/build
 
 FMC_BUS ?= $(shell pwd)/../fmc-bus
 export FMC_BUS
+HTVIC ?= $(shell pwd)/../driver-htvic
 
 GIT_VERSION = $(shell git describe --dirty --long --tags)
 
@@ -12,12 +13,13 @@ else
   ccflags-y += -DCERN_SUPER_MODULE=""
 endif
 
-ccflags-y += -I$(FMC_BUS)/kernel/include
+ccflags-y += -I$(FMC_BUS)/kernel/include -I$(HTVIC)
 ccflags-y += -DDEBUG
 ccflags-y += -DGIT_VERSION=\"$(GIT_VERSION)\"
 
 KBUILD_EXTRA_SYMBOLS += $(obj)/Module.symvers.vme
 KBUILD_EXTRA_SYMBOLS += $(FMC_BUS)/kernel/Module.symvers
+KBUILD_EXTRA_SYMBOLS += $(HTVIC)/Module.symvers
 
 obj-m := svec.o
 
@@ -26,7 +28,6 @@ svec-objs += svec-sysfs.o
 svec-objs += svec-fmc.o
 svec-objs += svec-i2c.o
 svec-objs += svec-irq.o
-svec-objs += svec-vic.o
 
 all: modules
 
