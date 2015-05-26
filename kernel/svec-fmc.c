@@ -278,6 +278,11 @@ int svec_fmc_create(struct svec_dev *svec, struct fmc_gateware *gw)
 	if (svec->verbose)
 		dev_info(svec->dev, "fmc devices registered\n");
 
+	/* scan SDB. Do not report errors, we don't care, SDB is not
+	   mandatory for the carrier board */
+	for (i = 0; i < svec->fmcs_n; i++)
+		fmc_scan_sdb_tree(svec->fmcs[i], 0);
+
 	return 0;
 
 failed:
