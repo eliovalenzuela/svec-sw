@@ -189,6 +189,8 @@ int svec_fmc_prepare(struct svec_dev *svec, unsigned int fmc_slot)
 	struct fmc_device *fmc;
 	int ret = 0;
 
+	svec->fmcs[fmc_slot] = NULL;
+
 	if (fmc_slot >= SVEC_N_SLOTS)
 		return -EINVAL;
 
@@ -257,13 +259,22 @@ int svec_fmc_prepare(struct svec_dev *svec, unsigned int fmc_slot)
 int svec_fmc_create(struct svec_dev *svec, struct fmc_gateware *gw)
 {
 	int i;
-	int error = 0;
+	int error = 0, err_cnt = 0;
 
 	/* fmc structures filling */
 	for (i = 0; i < svec->fmcs_n; i++) {
 		error = svec_fmc_prepare(svec, i);
-		if (error)
-			goto failed;
+		if (error) {
+			err_cnt++;
+			dev_err(svec->dev,
+				"Cannot create FMC device for FMC slot %d\n",
+				i + 1);
+		}
+	}
+	/* Fail only when all FMC preparations fail */
+	if (err_cnt == svec->fmcs_n) {
+		error = -ENODEV;
+		goto failed;
 	}
 
 	/* fmc device creation */
@@ -281,13 +292,15 @@ int svec_fmc_create(struct svec_dev *svec, struct fmc_gateware *gw)
 	/* scan SDB. Do not report errors, we don't care, SDB is not
 	   mandatory for the carrier board */
 	for (i = 0; i < svec->fmcs_n; i++)
-		fmc_scan_sdb_tree(svec->fmcs[i], 0);
+		if (svec->fmcs[i])
+			fmc_scan_sdb_tree(svec->fmcs[i], 0);
 
 	return 0;
 
 failed:
 	for (i = 0; i < svec->fmcs_n; i++)
-		kfree(svec->fmcs[i]);
+		if (svec->fmcs[i])
+			kfree(svec->fmcs[i]);
 
 	/* FIXME: free fmc allocations. */
 	return error;
