@@ -129,21 +129,6 @@ ATTR_STORE_CALLBACK(firmware_cmd)
 	return count;
 }
 
-ATTR_STORE_CALLBACK(firmware_blob)
-{
-	struct svec_dev *card = dev_get_drvdata(pdev);
-
-	if (!card->fw_buffer)
-		return -EAGAIN;
-
-	if (card->fw_length + count - 1 >= SVEC_MAX_GATEWARE_SIZE)
-		return -EINVAL;
-
-	memcpy(card->fw_buffer + card->fw_length, buf, count);
-	card->fw_length += count;
-
-	return count;
-}
 
 ATTR_SHOW_CALLBACK(dummy_attr)
 {
@@ -424,9 +409,6 @@ static DEVICE_ATTR(firmware_cmd,
 		   S_IWUSR | S_IRUGO,
 		   svec_show_dummy_attr, svec_store_firmware_cmd);
 
-static DEVICE_ATTR(firmware_blob,
-		   S_IWUSR | S_IRUGO,
-		   svec_show_dummy_attr, svec_store_firmware_blob);
 
 /* Helper attribute to find the physical slot for a given VME LUN. Used by
   the userspace tools. */
@@ -493,7 +475,6 @@ static DEVICE_ATTR(vme_data,
 
 static struct attribute *svec_attrs[] = {
 	&dev_attr_firmware_name.attr,
-	&dev_attr_firmware_blob.attr,
 	&dev_attr_firmware_cmd.attr,
 	&dev_attr_interrupt_vector.attr,
 	&dev_attr_interrupt_level.attr,
