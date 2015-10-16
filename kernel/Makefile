@@ -4,32 +4,7 @@ FMC_BUS ?= $(shell pwd)/../fmc-bus
 export FMC_BUS
 
 GIT_VERSION = $(shell git describe --dirty --long --tags)
-
-# For this CSM_VERSION, please see ohwr.org/csm documentation
-ifdef CONFIG_CSM_VERSION
-  ccflags-y += -D"CERN_SUPER_MODULE=MODULE_VERSION(\"$(CONFIG_CSM_VERSION)\")"
-else
-  ccflags-y += -DCERN_SUPER_MODULE=""
-endif
-
-# The library includes <sdb.h>, so point -I directtly there
-# include our header before to avoid conflicts with the kernel
-LINUXINCLUDE :=  -I$(FMC_BUS)/kernel/include $(LINUXINCLUDE)
-
-ccflags-y += -DDEBUG
-ccflags-y += -DGIT_VERSION=\"$(GIT_VERSION)\"
-
-KBUILD_EXTRA_SYMBOLS += $(obj)/Module.symvers.vme
-KBUILD_EXTRA_SYMBOLS += $(obj)/Module.symvers.fmc
-
-obj-m := svec.o
-
-svec-objs := svec-drv.o
-svec-objs += svec-sysfs.o
-svec-objs += svec-fmc.o
-svec-objs += svec-i2c.o
-svec-objs += svec-irq.o
-svec-objs += svec-vic.o
+export GIT_VERSION
 
 all: modules
 
