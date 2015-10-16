@@ -10,7 +10,18 @@ RUNME := $(shell test -d $(FMC_BUS) || git submodule update --init)
 
 DIRS = $(FMC_BUS) kernel tools
 
-all clean modules install modules_install:
-	for d in $(DIRS); do $(MAKE) -C $$d $@ || exit 1; done
+.PHONY: all clean modules install modules_install $(DIRS)
+
+all clean modules install modules_install: $(DIRS)
+
+clean: TARGET = clean
+modules: TARGET = modules
+install: TARGET = install
+modules_install: TARGET = modules_install
+
+$(DIRS):
+	$(MAKE) -C $@ $(TARGET)
+
+kernel: $(FMC_BUS)
 
 include scripts/gateware.mk
