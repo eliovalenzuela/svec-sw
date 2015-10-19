@@ -6,7 +6,8 @@ REPO_PARENT=$(shell /bin/pwd)/../..
 LINUX ?= /lib/modules/$(shell uname -r)/build
 
 FMC_BUS ?= $(shell pwd)/../fmc-bus
-export FMC_BUS
+# FMC_BUS_ABS has to be absolut path, due to beeing passed to the Kbuild
+FMC_BUS_ABS ?= $(abspath $(FMC_BUS) )
 
 GIT_VERSION = $(shell git describe --dirty --long --tags)
 export GIT_VERSION
@@ -16,7 +17,7 @@ all: modules
 .PHONY: all modules clean help install modules_install
 
 modules help install modules_install:
-	$(MAKE) -C $(LINUX) M=$(shell pwd) GIT_VERSION=$(GIT_VERSION) $@
+	$(MAKE) -C $(LINUX) M=$(shell pwd) GIT_VERSION=$(GIT_VERSION) FMC_BUS_ABS=$(FMC_BUS_ABS) $@
 
 # be able to run the "clean" rule even if $(LINUX) is not valid
 clean:
