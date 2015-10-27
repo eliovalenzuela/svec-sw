@@ -5,7 +5,7 @@ REPO_PARENT=$(shell /bin/pwd)/../..
 
 LINUX ?= /lib/modules/$(shell uname -r)/build
 
-FMC_BUS ?= $(shell pwd)/../fmc-bus
+FMC_BUS ?= ../fmc-bus
 # FMC_BUS_ABS has to be absolut path, due to beeing passed to the Kbuild
 FMC_BUS_ABS ?= $(abspath $(FMC_BUS) )
 
