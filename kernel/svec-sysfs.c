@@ -294,7 +294,7 @@ static int __next_token(char **str, char *buf, int buf_length)
 	while (*p && !isspace(*p))
 		p++;
 
-	len = min(p - tok + 1, buf_length - 1);
+	len = min((int) (p - tok + 1), buf_length - 1);
 	memcpy(buf, tok, len);
 	buf[len - 1] = 0;
 
