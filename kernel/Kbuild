@@ -1,0 +1,31 @@
+# add versions of supermodule. It is useful when svec-sw is included as sub-module
+# of a bigger project that we want to track
+ifdef CONFIG_SUPER_REPO
+ifdef CONFIG_SUPER_REPO_VERSION
+SUBMODULE_VERSIONS += MODULE_INFO(version_$(CONFIG_SUPER_REPO),\"$(CONFIG_SUPER_REPO_VERSION)\");
+endif
+endif
+# add versions of used submodules
+SUBMODULE_VERSIONS += MODULE_INFO(version_fmc_bus,\"$(FMC_BUS_VERSION)\");
+
+ccflags-y += -DADDITIONAL_VERSIONS="$(SUBMODULE_VERSIONS)"
+
+# The library includes <sdb.h>, so point -I directtly there
+# include our header before to avoid conflicts with the kernel
+LINUXINCLUDE :=  -I$(FMC_BUS_ABS)/kernel/include $(LINUXINCLUDE)
+
+ccflags-y += -I$(FMC_BUS_ABS)/kernel/include
+ccflags-y += -DDEBUG
+ccflags-y += -DGIT_VERSION=\"$(GIT_VERSION)\"
+
+KBUILD_EXTRA_SYMBOLS += $(obj)/Module.symvers.vmebus
+KBUILD_EXTRA_SYMBOLS += $(obj)/Module.symvers.fmc
+
+obj-m := svec.o
+
+svec-objs := svec-drv.o
+svec-objs += svec-sysfs.o
+svec-objs += svec-fmc.o
+svec-objs += svec-i2c.o
+svec-objs += svec-irq.o
+svec-objs += svec-vic.o

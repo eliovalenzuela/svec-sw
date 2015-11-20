@@ -1,42 +1,26 @@
+# include parent_common.mk for buildsystem's defines
+#use absolute path for REPO_PARENT
+REPO_PARENT=$(shell /bin/pwd)/../..
+-include $(REPO_PARENT)/parent_common.mk
+
 LINUX ?= /lib/modules/$(shell uname -r)/build
 
-FMC_BUS ?= $(shell pwd)/../fmc-bus
-export FMC_BUS
+FMC_BUS ?= ../fmc-bus
+# FMC_BUS_ABS has to be absolut path, due to beeing passed to the Kbuild
+FMC_BUS_ABS ?= $(abspath $(FMC_BUS) )
 
 GIT_VERSION = $(shell git describe --dirty --long --tags)
+export GIT_VERSION
 
-# For this CSM_VERSION, please see ohwr.org/csm documentation
-ifdef CONFIG_CSM_VERSION
-  ccflags-y += -D"CERN_SUPER_MODULE=MODULE_VERSION(\"$(CONFIG_CSM_VERSION)\")"
-else
-  ccflags-y += -DCERN_SUPER_MODULE=""
-endif
-
-# The library includes <sdb.h>, so point -I directtly there
-# include our header before to avoid conflicts with the kernel
-LINUXINCLUDE :=  -I$(FMC_BUS)/kernel/include $(LINUXINCLUDE)
-
-ccflags-y += -DDEBUG
-ccflags-y += -DGIT_VERSION=\"$(GIT_VERSION)\"
-
-KBUILD_EXTRA_SYMBOLS += $(obj)/Module.symvers.vme
-KBUILD_EXTRA_SYMBOLS += $(obj)/Module.symvers.fmc
-
-obj-m := svec.o
-
-svec-objs := svec-drv.o
-svec-objs += svec-sysfs.o
-svec-objs += svec-fmc.o
-svec-objs += svec-i2c.o
-svec-objs += svec-irq.o
-svec-objs += svec-vic.o
+FMC_BUS_VERSION ?= $(shell cd $(FMC_BUS_ABS); git describe --always --dirty --long --tags)
+export FMC_BUS_VERSION
 
 all: modules
 
 .PHONY: all modules clean help install modules_install
 
 modules help install modules_install:
-	$(MAKE) -C $(LINUX) M=$(shell pwd) GIT_VERSION=$(GIT_VERSION) $@
+	$(MAKE) -C $(LINUX) M=$(shell pwd) GIT_VERSION=$(GIT_VERSION) FMC_BUS_ABS=$(FMC_BUS_ABS) $@
 
 # be able to run the "clean" rule even if $(LINUX) is not valid
 clean:
