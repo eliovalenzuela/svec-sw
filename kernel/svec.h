@@ -92,6 +92,8 @@ struct svec_dev {
 
 	void *fw_buffer;
 	int fw_length;
+
+	struct nyab_carrier *ncarrier;
 };
 
 /* Functions and data in svec-vme.c */

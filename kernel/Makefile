@@ -1,5 +1,5 @@
 LINUX ?= /lib/modules/$(shell uname -r)/build
-
+NYAB ?= $(HOME)/git/nyab
 FMC_BUS ?= $(shell pwd)/../fmc-bus
 export FMC_BUS
 
@@ -16,12 +16,13 @@ endif
 # include our header before to avoid conflicts with the kernel
 LINUXINCLUDE :=  -I$(FMC_BUS)/kernel/include $(LINUXINCLUDE)
 
+ccflags-y += -I$(NYAB)/kernel
 ccflags-y += -DDEBUG
 ccflags-y += -DGIT_VERSION=\"$(GIT_VERSION)\"
 
 KBUILD_EXTRA_SYMBOLS += $(obj)/Module.symvers.vme
 KBUILD_EXTRA_SYMBOLS += $(obj)/Module.symvers.fmc
-
+KBUILD_EXTRA_SYMBOLS += $(NYAB)/kernel/Module.symvers
 obj-m := svec.o
 
 svec-objs := svec-drv.o

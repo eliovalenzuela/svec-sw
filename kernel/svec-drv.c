@@ -17,6 +17,7 @@
 #include <linux/delay.h>
 #include <linux/jhash.h>
 #include <linux/fmc-sdb.h>
+#include <nyab.h>
 #include "svec.h"
 #include "hw/xloader_regs.h"
 
@@ -378,6 +379,9 @@ static int svec_remove(struct device *pdev, unsigned int ndev)
 {
 	struct svec_dev *svec = dev_get_drvdata(pdev);
 
+	nyab_carrier_unregister(svec->ncarrier);
+	nyab_carrier_free(svec->ncarrier);
+
 	if (test_bit(SVEC_FLAG_FMCS_REGISTERED, &svec->flags)) {
 		svec_fmc_destroy(svec);
 		clear_bit(SVEC_FLAG_FMCS_REGISTERED, &svec->flags);
@@ -703,6 +707,9 @@ int svec_reconfigure(struct svec_dev *svec, struct fmc_gateware *gw)
 		set_bit(SVEC_FLAG_FMCS_REGISTERED, &svec->flags);
 	}
 
+	/* Update NYAB base kernel address */
+	svec->ncarrier->kernel_va = svec->map[MAP_REG]->kernel_va;
+
 	return 0;
 failed_unmap:
 	svec_unmap_window(svec, MAP_REG);
@@ -793,6 +800,56 @@ static void svec_destroy_misc_device(struct svec_dev *svec)
 }
 /* * * * * * END MISC DEVICE * * * * */
 
+struct svec_nyab_data {
+	char fmc_slot[2][NYAB_MAX_STR_LEN];
+	char bitstream[NYAB_MAX_STR_LEN];
+};
+
+/**
+ * It validates carrier private data
+ */
+static int svec_nyab_validate(struct nyab_carrier *carrier)
+{
+	struct svec_dev *svec = dev_get_drvdata(carrier->dev.parent);
+	struct svec_nyab_data *data;
+	int i, err;
+
+	/* verify that the the description is for SVEC */
+	if (strncasecmp(carrier->carr->name, "SVEC", 64)) {
+		dev_err(&carrier->dev,
+			"Description for '%s' but the carrier is 'svec'",
+			carrier->carr->name);
+		return -EINVAL;
+	}
+
+	if (sizeof(struct svec_nyab_data) != carrier->private.len) {
+		dev_err(&carrier->dev,
+			"Carrier private data length differ from descriptor");
+		return -EINVAL;
+	}
+	data = carrier->private.data;
+
+	for (i = 0; i < 2; ++i) {
+		if (strncmp(data->fmc_slot[i], svec->fmcs[i]->id.product_name,
+			    NYAB_MAX_STR_LEN)) {
+			dev_err(&carrier->dev,
+				"Expected '%s' mezzanine in slot %d, found '%s'",
+				data->fmc_slot[i], i,
+				svec->fmcs[i]->id.product_name);
+			return -EINVAL;
+		}
+	}
+
+	err = svec_load_fpga_file(svec, data->bitstream);
+	if (err)
+		return err;
+	svec_setup_csr(svec);
+
+	return 0;
+}
+static const struct nyab_carrier_operations svec_nyab_op = {
+	.validate = svec_nyab_validate,
+};
 
 static int svec_probe(struct device *pdev, unsigned int ndev)
 {
@@ -877,11 +934,34 @@ static int svec_probe(struct device *pdev, unsigned int ndev)
 		goto failed_misc;
 	}
 
+	/* Load NYAB carrier device for our FPGA */
+	svec->ncarrier = nyab_carrier_alloc(pdev, 0);
+	if (!svec->ncarrier) {
+		error = -ENOMEM;
+		goto failed_nyab_alloc;
+	}
+	svec->ncarrier->op = &svec_nyab_op;
+	svec->ncarrier->irq = svec->cfg_cur.interrupt_vector;
+
 	/* Map user address space & give control to the FMCs */
 	svec_reconfigure(svec, NULL);
 
+	error = nyab_carrier_register(svec->ncarrier, svec->lun);
+	if (error)
+		goto failed_nyab_reg;
+
 	return 0;
 
+failed_nyab_reg:
+	if (test_bit(SVEC_FLAG_FMCS_REGISTERED, &svec->flags)) {
+		svec_fmc_destroy(svec);
+		clear_bit(SVEC_FLAG_FMCS_REGISTERED, &svec->flags);
+	}
+
+	svec_unmap_window(svec, MAP_CR_CSR);
+	svec_unmap_window(svec, MAP_REG);
+	nyab_carrier_free(svec->ncarrier);
+failed_nyab_alloc:
 failed_misc:
 	svec_remove_sysfs_files(svec);
 failed:
