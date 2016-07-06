@@ -25,20 +25,8 @@ char *svec_fw_name = "fmc/svec-golden.bin";
 /* Module parameters */
 static int slot[SVEC_MAX_DEVICES];
 static unsigned int slot_num;
-static unsigned int vme_base[SVEC_MAX_DEVICES] = SVEC_UNINITIALIZED_VME_BASE;
-static unsigned int vme_base_num;
-static char *fw_name[SVEC_MAX_DEVICES];
-static unsigned int fw_name_num;
-static int vector[SVEC_MAX_DEVICES] = SVEC_UNINITIALIZED_IRQ_VECTOR;
-static unsigned int vector_num;
-static int level[SVEC_MAX_DEVICES] = SVEC_DEFAULT_IRQ_LEVEL;
-static unsigned int level_num;
 static int lun[SVEC_MAX_DEVICES] = SVEC_DEFAULT_IDX;
 static unsigned int lun_num;
-static int vme_am[SVEC_MAX_DEVICES] = SVEC_DEFAULT_VME_AM;
-static unsigned int vme_am_num;
-static int vme_size[SVEC_MAX_DEVICES] = SVEC_DEFAULT_VME_SIZE;
-static unsigned int vme_size_num;
 static int verbose;
 
 static void svec_destroy_misc_device(struct svec_dev *svec);
@@ -47,18 +35,6 @@ module_param_array(slot, int, &slot_num, S_IRUGO);
 MODULE_PARM_DESC(slot, "Slot where SVEC card is installed");
 module_param_array(lun, int, &lun_num, S_IRUGO);
 MODULE_PARM_DESC(lun, "Index value for SVEC card");
-module_param_array(vme_base, uint, &vme_base_num, S_IRUGO);
-MODULE_PARM_DESC(vme_base, "VME Base address of the SVEC card registers");
-module_param_array(vme_am, uint, &vme_am_num, S_IRUGO);
-MODULE_PARM_DESC(vme_size, "VME Window size of the SVEC card registers");
-module_param_array(vme_size, uint, &vme_size_num, S_IRUGO);
-MODULE_PARM_DESC(vme_am, "VME Address modifier of the SVEC card registers");
-module_param_array_named(fw_name, fw_name, charp, &fw_name_num, S_IRUGO);
-MODULE_PARM_DESC(fw_name, "Firmware file");
-module_param_array(vector, int, &vector_num, S_IRUGO);
-MODULE_PARM_DESC(vector, "IRQ vector");
-module_param_array(level, int, &level_num, S_IRUGO);
-MODULE_PARM_DESC(level, "IRQ level");
 module_param(verbose, int, S_IRUGO);
 MODULE_PARM_DESC(verbose, "Output lots of debugging messages");
 
@@ -862,10 +838,7 @@ static int svec_probe(struct device *pdev, unsigned int ndev)
 	}
 
 	/* Get firmware name */
-	if (idx < fw_name_num)
-		svec->fw_name = fw_name[idx];
-	else
-		svec->fw_name = svec_fw_name;	/* Default value */
+	svec->fw_name = svec_fw_name;	/* Default value */
 
 	if (svec->verbose)
 		dev_info(pdev, "using '%s' golden bitstream.",
@@ -916,53 +889,6 @@ static struct vme_driver svec_driver = {
 	},
 };
 
-static struct vme_dev *vme_dev_tbl[SVEC_MAX_DEVICES];
-static int __init svec_register_devices(void)
-{
-	int err, i;
-
-	for (i = 0; i< lun_num; i++) {
-		vme_dev_tbl[i] = kzalloc(sizeof(struct vme_dev), GFP_KERNEL);
-		if (!vme_dev_tbl[i]) {
-			err = -ENOMEM;
-			goto out_all;
-		}
-
-		vme_dev_tbl[i]->base_address = vme_base[i];
-		vme_dev_tbl[i]->size = vme_size[i];
-		vme_dev_tbl[i]->am = vme_am[i];
-		vme_dev_tbl[i]->slot = slot[i];
-		vme_dev_tbl[i]->irq_vector = vector[i];
-		vme_dev_tbl[i]->irq_level = level[i];
-		err = vme_register_device(vme_dev_tbl[i], &svec_driver);
-		if (err)
-			goto out_reg;
-	}
-
-	return 0;
-
-out_reg:
-	kfree(vme_dev_tbl[i]);
-	vme_dev_tbl[i] = NULL;
-out_all:
-	while (--i >= 0) {
-		vme_unregister_device(vme_dev_tbl[i]);
-		kfree(vme_dev_tbl[i]);
-		vme_dev_tbl[i] = NULL;
-	}
-	return err;
-}
-
-static void svec_unregister_devices(void)
-{
-	int i;
-
-	for (i = 0; i< lun_num; i++) {
-		vme_unregister_device(vme_dev_tbl[i]);
-		kfree(vme_dev_tbl[i]);
-		vme_dev_tbl[i] = NULL;
-	}
-}
 
 static int __init svec_init(void)
 {
@@ -980,32 +906,12 @@ static int __init svec_init(void)
 		return -EINVAL;
 	}
 
-	error |= (vme_base_num && vme_base_num != slot_num);
-	error |= (vme_am_num && vme_am_num != slot_num);
-	error |= (vme_size_num && vme_size_num != slot_num);
-	error |= (level_num && level_num != slot_num);
-	error |= (vector_num && vector_num != slot_num);
-
-	error |= (fw_name_num && fw_name_num != slot_num);
-
-	if (error) {
-		pr_err("%s: The number of vme_base/vme_am/vme_size/level/vector/fw_name/use_vic/use_fmc parameters must be zero or equal to the number of cards.\n",
-		     __func__);
-		return -EINVAL;
-	}
-
 	/* Just register the driver, we register devices our selfs */
 	error = vme_register_driver(&svec_driver, 0);
 	if (error) {
 		pr_err("%s: Cannot register vme driver - lun [%d]\n", __func__,
 		       lun_num);
-	}
-
-	error = svec_register_devices();
-	if (error) {
-		pr_err("%s: Cannot register vme devices\n", __func__);
-		vme_unregister_driver(&svec_driver);
-		return error;
+		return -1;
 	}
 
 	return 0;
@@ -1013,7 +919,6 @@ static int __init svec_init(void)
 
 static void __exit svec_exit(void)
 {
-	svec_unregister_devices();
 	vme_unregister_driver(&svec_driver);
 }
 
