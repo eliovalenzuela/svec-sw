@@ -27,6 +27,26 @@ static int verbose;
 
 static void svec_destroy_misc_device(struct svec_dev *svec);
 
+static const struct resource svec_csr = {
+	.name = "SVEC CSR mem",
+	.start = 0,
+	.end = -1,
+	.flags	= IORESOURCE_MEM,
+	.parent = NULL,
+	.child = NULL,
+	.sibling = NULL,
+};
+
+static const struct resource svec_fpga = {
+	.name = "SVEC FPGA mem",
+	.start = 0,
+	.end = -1,
+	.flags	= IORESOURCE_MEM,
+	.parent = NULL,
+	.child = NULL,
+	.sibling = NULL,
+};
+
 module_param(verbose, int, S_IRUGO);
 MODULE_PARM_DESC(verbose, "Output lots of debugging messages");
 
@@ -88,6 +108,22 @@ int svec_map_window(struct svec_dev *svec, enum svec_map_win map_type)
 		svec->map[map_type] = NULL;
 		return -EINVAL;
 	}
+
+	switch (map_type) {
+	case MAP_REG:
+		svec->res[map_type].start = (unsigned long) svec->map[map_type]->kernel_va;
+		svec->res[map_type].end = svec->res[map_type].start
+			+ svec->map[map_type]->sizel;
+		break;
+	case MAP_CR_CSR:
+		svec->res[map_type].start = (unsigned long) svec->map[map_type]->kernel_va;
+		svec->res[map_type].end = svec->res[map_type].start
+			+ svec->map[map_type]->sizel;
+		break;
+	default:
+		break;
+	}
+
 
 	if (svec->verbose)
 		dev_info(dev, "%s mapping successful at 0x%p\n",
@@ -778,6 +814,9 @@ static int svec_probe(struct device *pdev, unsigned int ndev)
 		dev_err(pdev, "Cannot allocate memory for svec card struct\n");
 		return -ENOMEM;
 	}
+
+	memcpy(&svec->res[MAP_CR_CSR], &svec_csr, sizeof(struct resource));
+	memcpy(&svec->res[MAP_REG], &svec_fpga, sizeof(struct resource));
 
 	spin_lock_init(&svec->irq_lock);
 

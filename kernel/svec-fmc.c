@@ -10,16 +10,21 @@
 #include <linux/slab.h>
 #include <linux/fmc.h>
 #include <linux/interrupt.h>
+#include <linux/irqdomain.h>
 #include <linux/module.h>
 #include <linux/fmc-sdb.h>
 #include <linux/platform_device.h>
 #include "svec.h"
+
+static int trtl_id = 1;
+static int vic_id = 1;
 
 static int svec_show_sdb;
 module_param_named(show_sdb, svec_show_sdb, int, 0444);
 
 /* The main role of this file is offering the fmc_operations for the svec */
 static struct fmc_operations svec_fmc_operations;
+static int svec_scan_cores(struct svec_dev *svec);
 
 static uint32_t svec_readl(struct fmc_device *fmc, int offset)
 {
@@ -67,40 +72,133 @@ static int svec_reprogram_raw(struct fmc_device *fmc, struct fmc_driver *drv,
 	svec_setup_csr(svec);
 
 	fmc->flags |= FMC_DEVICE_HAS_CUSTOM;
+
+	svec_scan_cores(svec);
 	return 0;
 }
 
-#define WRNC_EEPROM_SIZE		8192	/* The standard eeprom size */
-static const char wrnc_eeimg[WRNC_EEPROM_SIZE] = {
-	0x01, 0x00, 0x00, 0x01, 0x00, 0x0a, 0x00, 0xf4, 0x01, 0x09, 0x00, 0xd9,
-	0x99, 0x97, 0xc4, 0x63, 0x65, 0x72, 0x6e, 0xcc, 0x77, 0x72, 0x2d, 0x6e,
-	0x6f, 0x64, 0x65, 0x2d, 0x63, 0x6f, 0x72, 0x65, 0xc4, 0x30, 0x30, 0x30,
-	0x31, 0xcb, 0x73, 0x61, 0x6d, 0x70, 0x6c, 0x65, 0x2d, 0x70, 0x61, 0x72,
-	0x74, 0xda, 0x32, 0x30, 0x31, 0x34, 0x2d, 0x31, 0x31, 0x2d, 0x32, 0x31,
-	0x20, 0x31, 0x32, 0x3a, 0x34, 0x31, 0x3a, 0x33, 0x37, 0x2e, 0x37, 0x31,
-	0x31, 0x39, 0x31, 0x31, 0xc1, 0x00, 0x00, 0xc4, 0x02, 0x02, 0x0d, 0xf7,
-	0xf8, 0x02, 0xb0, 0x04, 0x74, 0x04, 0xec, 0x04, 0x00, 0x00, 0x00, 0x00,
-	0xe8, 0x03, 0x02, 0x02, 0x0d, 0x5c, 0x93, 0x01, 0x4a, 0x01, 0x39, 0x01,
-	0x5a, 0x01, 0x00, 0x00, 0x00, 0x00, 0xb8, 0x0b, 0x02, 0x02, 0x0d, 0x63,
-	0x8c, 0x00, 0xfa, 0x00, 0xed, 0x00, 0x06, 0x01, 0x00, 0x00, 0x00, 0x00,
-	0xa0, 0x0f, 0x01, 0x02, 0x0d, 0xfb, 0xf5, 0x05, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x0d, 0xfc,
-	0xf4, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x01, 0x02, 0x0d, 0xfd, 0xf3, 0x03, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xfa, 0x82, 0x0b, 0xea,
-	0x8f, 0xa2, 0x12, 0x00, 0x00, 0x1e, 0x44, 0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00,
+static struct resource htvic_resource[] = {
+	DEFINE_RES_MEM_NAMED(0x0,0x100, "base"),
+	DEFINE_RES_IRQ_NAMED(0, "carrier"),
+};
+static struct platform_device htvic_device = {
+	.name = "htvic-svec",
+	.num_resources = ARRAY_SIZE(htvic_resource),
 };
 
-static int svec_create_wrnc(struct svec_dev *svec)
+static void svec_release_vic(struct device *dev)
 {
-	struct vme_dev *vme = to_vme_dev(svec->dev);
-	struct fmc_device *fmc;
-	int ret, err, i;
+	struct platform_device *pdev = container_of(dev, struct platform_device, dev);
 
-	if (svec->fmc_wrnc) {
-		dev_err(svec->dev, "WhiteRebbit NodeCore aldready exists\n");
+	kfree(pdev->resource);
+	kfree(pdev);
+}
+
+static int svec_create_vic(struct svec_dev *svec)
+{
+	struct vme_dev *vme_dev = to_vme_dev(svec->dev);
+	struct platform_device *pdev;
+	int ret, i;
+
+	if (svec->pdev_vic)
 		return -EBUSY;
+
+	for (i = 0; i < SVEC_N_SLOTS; ++i) {
+		ret = fmc_scan_sdb_tree(svec->fmcs[i], 0x0);
+		if (ret >= 0 || ret == -EBUSY)
+			break;
+	}
+
+	ret = fmc_find_sdb_device(svec->fmcs[0]->sdb, 0xCE42, 0x0013, NULL);
+	if (ret < 0)
+		return ret;
+
+	pdev = kmemdup(&htvic_device, sizeof(struct platform_device), GFP_KERNEL);
+	if (!pdev) {
+		dev_err(svec->dev,
+			"cannot allocate VIC device\n");
+		return -ENOMEM;
+	}
+	pdev->dev.parent = &vme_dev->dev;
+	pdev->dev.release = svec_release_vic;
+	pdev->id = vic_id++;
+	pdev->resource = kmemdup(htvic_resource,
+				 sizeof(struct resource) * ARRAY_SIZE(htvic_resource),
+				 GFP_KERNEL);
+	if (!pdev->resource) {
+		ret = -ENOMEM;
+		goto out_res;
+	}
+	/* Set the FPGA base address and mockturtle base address */
+	pdev->resource[0].parent = &svec->res[MAP_REG];
+	pdev->resource[0].start = svec->res[MAP_REG].start + ret;
+	pdev->resource[0].end = pdev->resource[0].start + 0x100 - 1;
+	pdev->resource[1].start = vme_dev->irq;
+	pdev->resource[1].flags |= IORESOURCE_IRQ_HIGHEDGE;
+
+	ret = platform_device_register(pdev);
+	if (ret)
+		goto out_reg;
+
+	svec->pdev_vic = pdev;
+
+	return 0;
+
+out_reg:
+	kfree(pdev->resource);
+out_res:
+	kfree(pdev);
+
+	return ret;
+}
+
+static void svec_destroy_vic(struct svec_dev *svec)
+{
+	if (!svec->pdev_vic)
+		return;
+
+	platform_device_unregister(svec->pdev_vic);
+	svec->pdev_vic = NULL;
+}
+
+static struct resource trtl_resource[] = {
+	DEFINE_RES_MEM_NAMED(0x0,0x20000, "base"),
+	DEFINE_RES_IRQ_NAMED(0, "trtl-hmq"),
+	DEFINE_RES_IRQ_NAMED(1, "trtl-dbg"),
+};
+static struct platform_device trtl_device = {
+	.name = "mock-turtle-svec",
+	.num_resources = ARRAY_SIZE(trtl_resource),
+};
+
+static void svec_release_trtl(struct device *dev)
+{
+	struct platform_device *pdev = container_of(dev, struct platform_device, dev);
+
+	kfree(pdev->resource);
+	kfree(pdev);
+}
+
+static int svec_create_trtl(struct svec_dev *svec)
+{
+	struct vme_dev *vme_dev = to_vme_dev(svec->dev);
+	struct platform_device *pdev;
+	struct irq_domain *irqd;
+	int ret, i;
+
+	if (svec->pdev_trtl) {
+		dev_err(svec->dev, "Mock Turtle aldready exists\n");
+		return -EBUSY;
+	}
+
+	if (!svec->pdev_vic) {
+		dev_err(svec->dev, "Mock Turtle needs the HTVIC device\n");
+		return -ENODEV;
+	}
+	irqd = irq_find_host(svec->pdev_vic);
+	if (!irqd) {
+		dev_err(svec->dev, "Cannot find HT-VIC irq domain\n");
+		return -ENODEV;
 	}
 
 	for (i = 0; i < SVEC_N_SLOTS; ++i) {
@@ -111,48 +209,69 @@ static int svec_create_wrnc(struct svec_dev *svec)
 
 	/* Look for the WhiteRabbit NodeCore component and create a device
 	   based of FMC device on virtual slot 2 */
-        ret = fmc_find_sdb_device(svec->fmcs[i]->sdb, 0xCE42, 0x90DE, NULL);
+	ret = fmc_find_sdb_device(svec->fmcs[i]->sdb, 0xCE42, 0x90DE, NULL);
 	if (ret < 0)
 		return ret;
 
-	fmc = kzalloc(sizeof(*fmc), GFP_KERNEL);
-	if (!fmc) {
+	pdev = kmemdup(&trtl_device, sizeof(struct platform_device), GFP_KERNEL);
+	if (!pdev) {
 		dev_err(svec->dev,
-			"cannot allocate fmc slot for White-Rabbit Node-Core\n");
+			"cannot allocate Mock Turtle device\n");
 		return -ENOMEM;
 	}
-
-	fmc->version = FMC_VERSION;
-	fmc->carrier_name = "SVEC";
-	fmc->carrier_data = svec;
-	fmc->owner = THIS_MODULE;
-
-	fmc->fpga_base = svec->map[MAP_REG]->kernel_va;
-
-	fmc->irq = 0;		/*TO-DO */
-	fmc->op = &svec_fmc_operations;
-	fmc->hwdev = svec->dev;	/* for messages */
-
-	fmc->slot_id = SVEC_N_SLOTS; /* Yes, is a virtual FMC slot, so
-					outside SVEC slot enumeration */
-	fmc->device_id = (vme->slot << 6) | fmc->slot_id;
-
-	/* Overwrite with the white rabbit fake eeprom */
-	fmc->eeprom_len = WRNC_EEPROM_SIZE;
-	fmc->eeprom = wrnc_eeimg;
-	fmc->eeprom_addr = 0x50 + 2 * fmc->slot_id;
-	fmc->memlen = svec->cfg_cur.vme_size;
-
-	fmc->flags &= ~FMC_DEVICE_HAS_GOLDEN;
-	fmc->flags |= FMC_DEVICE_HAS_CUSTOM;
-
-	err = fmc_device_register(fmc);
-	if (err){
-		dev_err(svec->dev, "Cannot register White-Rabbit Node-Core\n");
-		return err;
+	pdev->dev.parent = &vme_dev->dev;
+	pdev->dev.release = svec_release_trtl;
+	pdev->id = trtl_id++;
+	pdev->resource = kmemdup(&trtl_resource,
+				 sizeof(struct resource) * ARRAY_SIZE(trtl_resource),
+				 GFP_KERNEL);
+	if (!pdev->resource) {
+		ret = -ENOMEM;
+		goto out_res;
 	}
+	/* Set the FPGA base address and mockturtle base address */
+	pdev->resource[0].parent = &svec->res[MAP_REG];
+	pdev->resource[0].start = svec->res[MAP_REG].start + ret;
+	pdev->resource[0].end = pdev->resource[0].start + 0x10000 - 1;
+	/* Set mockturtle IRQ addresses */
+	pdev->resource[1].start = irq_find_mapping(irqd, 2);
+	pdev->resource[1].flags |= IORESOURCE_IRQ_HIGHEDGE;
+	pdev->resource[2].start = irq_find_mapping(irqd, 3);
+	pdev->resource[2].flags |= IORESOURCE_IRQ_HIGHEDGE;
 
-	svec->fmc_wrnc = fmc;
+	ret = platform_device_register(pdev);
+	if (ret)
+		goto out_reg;
+
+	svec->pdev_trtl = pdev;
+
+	return 0;
+
+out_reg:
+	kfree(pdev->resource);
+out_res:
+	kfree(pdev);
+	return ret;
+}
+
+static void svec_destroy_trtl(struct svec_dev *svec)
+{
+	if (!svec->pdev_trtl)
+		return;
+
+	platform_device_unregister(svec->pdev_trtl);
+	svec->pdev_trtl = NULL;
+}
+
+static int svec_scan_cores(struct svec_dev *svec)
+{
+	/* Destroy old components */
+	/* Remove trtl before vic. MockTurtle use the VIC */
+	svec_destroy_trtl(svec);
+	svec_destroy_vic(svec);
+
+	svec_create_vic(svec);
+	svec_create_trtl(svec);
 
 	return 0;
 }
@@ -358,13 +477,19 @@ int svec_fmc_create(struct svec_dev *svec, struct fmc_gateware *gw)
 	}
 
 	/* fmc device creation */
-	error = fmc_device_register_n_gw(svec->fmcs, svec->fmcs_n, gw);
+	error = fmc_device_register_gw(svec->fmcs[0], gw);
 	if (error) {
 		dev_err(svec->dev, "Error registering fmc devices\n");
 		goto failed;
 	}
 
-	svec_create_wrnc(svec);
+	/* fmc device creation */
+	error = fmc_device_register(svec->fmcs[1]);
+	if (error) {
+		fmc_device_unregister(svec->fmcs[0]);
+		dev_err(svec->dev, "Error registering fmc devices\n");
+		goto failed;
+	}
 
 	/* FIXME: how do we retrieve the actual number of registered
 	 * devices?
@@ -390,8 +515,9 @@ failed:
 
 void svec_fmc_destroy(struct svec_dev *svec)
 {
-	if (svec->fmc_wrnc)
-		fmc_device_unregister(svec->fmc_wrnc);
+	/* The MockTurtle use the VIC so remove it before */
+	svec_destroy_trtl(svec);
+	svec_destroy_vic(svec);
 
 	if (!svec->fmcs[0])
 		return;

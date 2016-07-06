@@ -77,6 +77,8 @@ struct svec_dev {
 
 	struct fmc_device *fmcs[SVEC_N_SLOTS];
 	struct fmc_device *fmc_wrnc; /* HACK: REMOVE ME when we move to SDB-bus */
+	struct platform_device *pdev_trtl;
+	struct platform_device *pdev_vic;
 	irq_handler_t fmc_handlers[SVEC_N_SLOTS];
 
 	/* FMC devices */
@@ -91,6 +93,8 @@ struct svec_dev {
 
 	void *fw_buffer;
 	int fw_length;
+
+	struct resource res[__MAX_MAP];
 };
 
 /* Functions and data in svec-vme.c */
