@@ -818,8 +818,6 @@ static int svec_probe(struct device *pdev, unsigned int ndev)
 	memcpy(&svec->res[MAP_CR_CSR], &svec_csr, sizeof(struct resource));
 	memcpy(&svec->res[MAP_REG], &svec_fpga, sizeof(struct resource));
 
-	spin_lock_init(&svec->irq_lock);
-
 	/* Initialize struct fields */
 	svec->verbose = verbose;
 	svec->fmcs_n = SVEC_N_SLOTS;	/* FIXME: Two mezzanines */

@@ -76,18 +76,13 @@ struct svec_dev {
 	struct miscdevice mdev;
 
 	struct fmc_device *fmcs[SVEC_N_SLOTS];
-	struct fmc_device *fmc_wrnc; /* HACK: REMOVE ME when we move to SDB-bus */
 	struct platform_device *pdev_trtl;
 	struct platform_device *pdev_vic;
-	irq_handler_t fmc_handlers[SVEC_N_SLOTS];
 
 	/* FMC devices */
 	int fmcs_n;		/* Number of FMC devices */
-	unsigned long irq_count;	/* for mezzanine use too */
 	unsigned int current_vector;
-	spinlock_t irq_lock;
 
-	struct vic_irq_controller *vic;
 	uint32_t vme_raw_addr;	/* VME address for raw VME I/O through vme_addr/vme_data attributes */
 	int verbose;
 
@@ -149,18 +144,4 @@ int svec_setup_csr(struct svec_dev *svec);
 int svec_validate_configuration(struct device *pdev, struct svec_config *cfg);
 int svec_load_golden(struct svec_dev *svec);
 
-/* VIC interrupt controller stuff */
-irqreturn_t svec_vic_irq_dispatch(struct svec_dev *svec);
-int svec_vic_irq_request(struct svec_dev *svec, struct fmc_device *fmc, unsigned long id, irq_handler_t handler);
-void svec_vic_irq_free(struct svec_dev *svec, unsigned long id);
-void svec_vic_irq_ack(struct svec_dev *svec, unsigned long id);
-
-/* Generic IRQ routines */
-
-int svec_irq_request(struct fmc_device *fmc, irq_handler_t handler, char *name,
-		     int flags);
-void svec_irq_ack(struct fmc_device *fmc);
-int svec_irq_free(struct fmc_device *fmc);
-
 #endif /* __SVEC_H__ */
-

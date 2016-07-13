@@ -353,9 +353,9 @@ static struct fmc_operations svec_fmc_operations = {
 	.write32 = svec_writel,
 	.reprogram_raw = svec_reprogram_raw,
 	.reprogram = svec_reprogram,
-	.irq_request = svec_irq_request,
-	.irq_ack = svec_irq_ack,
-	.irq_free = svec_irq_free,
+	.irq_request = NULL,
+	.irq_ack = NULL,
+	.irq_free = NULL,
 	.gpio_config = svec_gpio_config,
 	.read_ee = svec_read_ee,
 	.write_ee = svec_write_ee,
@@ -524,9 +524,9 @@ void svec_fmc_destroy(struct svec_dev *svec)
 
 	fmc_device_unregister_n(svec->fmcs, svec->fmcs_n);
 
-	WARN(test_bit(SVEC_FLAG_IRQS_REQUESTED, &svec->flags) || svec->vic,
-	     "A Mezzanine driver didn't release all its IRQ handlers (VIC %p, FLAG 0x%lx)\n",
-	     svec->vic, svec->flags);
+	WARN(test_bit(SVEC_FLAG_IRQS_REQUESTED, &svec->flags),
+	     "A Mezzanine driver didn't release all its IRQ handlers (FLAG 0x%lx)\n",
+	     svec->flags);
 	memset(svec->fmcs, 0, sizeof(struct fmc_devices *) * SVEC_N_SLOTS);
 
 	if (svec->verbose)
