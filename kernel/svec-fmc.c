@@ -86,12 +86,21 @@ static struct platform_device htvic_device = {
 	.num_resources = ARRAY_SIZE(htvic_resource),
 };
 
-static void svec_release_vic(struct device *dev)
+static void svec_release_platform_device(struct device *dev)
 {
 	struct platform_device *pdev = container_of(dev, struct platform_device, dev);
 
 	kfree(pdev->resource);
 	kfree(pdev);
+}
+
+static void svec_destroy_platform(struct platform_device *pdev)
+{
+	if (!pdev)
+		return;
+
+	platform_device_unregister(pdev);
+	pdev = NULL;
 }
 
 static int svec_create_vic(struct svec_dev *svec)
@@ -120,7 +129,7 @@ static int svec_create_vic(struct svec_dev *svec)
 		return -ENOMEM;
 	}
 	pdev->dev.parent = &vme_dev->dev;
-	pdev->dev.release = svec_release_vic;
+	pdev->dev.release = svec_release_platform_device;
 	pdev->id = vic_id++;
 	pdev->resource = kmemdup(htvic_resource,
 				 sizeof(struct resource) * ARRAY_SIZE(htvic_resource),
@@ -152,14 +161,6 @@ out_res:
 	return ret;
 }
 
-static void svec_destroy_vic(struct svec_dev *svec)
-{
-	if (!svec->pdev_vic)
-		return;
-
-	platform_device_unregister(svec->pdev_vic);
-	svec->pdev_vic = NULL;
-}
 
 static struct resource trtl_resource[] = {
 	DEFINE_RES_MEM_NAMED(0x0,0x20000, "base"),
@@ -170,14 +171,6 @@ static struct platform_device trtl_device = {
 	.name = "mock-turtle-svec",
 	.num_resources = ARRAY_SIZE(trtl_resource),
 };
-
-static void svec_release_trtl(struct device *dev)
-{
-	struct platform_device *pdev = container_of(dev, struct platform_device, dev);
-
-	kfree(pdev->resource);
-	kfree(pdev);
-}
 
 static int svec_create_trtl(struct svec_dev *svec)
 {
@@ -220,7 +213,7 @@ static int svec_create_trtl(struct svec_dev *svec)
 		return -ENOMEM;
 	}
 	pdev->dev.parent = &vme_dev->dev;
-	pdev->dev.release = svec_release_trtl;
+	pdev->dev.release = svec_release_platform_device;
 	pdev->id = trtl_id++;
 	pdev->resource = kmemdup(&trtl_resource,
 				 sizeof(struct resource) * ARRAY_SIZE(trtl_resource),
@@ -254,21 +247,13 @@ out_res:
 	return ret;
 }
 
-static void svec_destroy_trtl(struct svec_dev *svec)
-{
-	if (!svec->pdev_trtl)
-		return;
-
-	platform_device_unregister(svec->pdev_trtl);
-	svec->pdev_trtl = NULL;
-}
 
 static int svec_scan_cores(struct svec_dev *svec)
 {
 	/* Destroy old components */
 	/* Remove trtl before vic. MockTurtle use the VIC */
-	svec_destroy_trtl(svec);
-	svec_destroy_vic(svec);
+	svec_destroy_platform(svec->pdev_trtl);
+	svec_destroy_platform(svec->pdev_vic);
 
 	svec_create_vic(svec);
 	svec_create_trtl(svec);
@@ -516,8 +501,8 @@ failed:
 void svec_fmc_destroy(struct svec_dev *svec)
 {
 	/* The MockTurtle use the VIC so remove it before */
-	svec_destroy_trtl(svec);
-	svec_destroy_vic(svec);
+	svec_destroy_platform(svec->pdev_trtl);
+	svec_destroy_platform(svec->pdev_vic);
 
 	if (!svec->fmcs[0])
 		return;
