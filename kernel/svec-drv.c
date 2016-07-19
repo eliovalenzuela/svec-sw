@@ -16,6 +16,7 @@
 #include <linux/firmware.h>
 #include <linux/delay.h>
 #include <linux/jhash.h>
+#include <linux/platform_device.h>
 #include <linux/fmc-sdb.h>
 #include "svec.h"
 #include "hw/xloader_regs.h"
@@ -382,6 +383,16 @@ int svec_load_fpga(struct svec_dev *svec, const void *blob, int size)
 static int svec_remove(struct device *pdev, unsigned int ndev)
 {
 	struct svec_dev *svec = dev_get_drvdata(pdev);
+
+	/* The MockTurtle use the VIC so remove it before */
+	if (svec->pdev_trtl) {
+		platform_device_unregister(svec->pdev_trtl);
+		svec->pdev_trtl = NULL;
+	}
+	if (svec->pdev_vic) {
+		platform_device_unregister(svec->pdev_vic);
+		svec->pdev_vic = NULL;
+	}
 
 	if (test_bit(SVEC_FLAG_FMCS_REGISTERED, &svec->flags)) {
 		svec_fmc_destroy(svec);

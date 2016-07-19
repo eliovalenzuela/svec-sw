@@ -57,6 +57,17 @@ static int svec_reprogram_raw(struct fmc_device *fmc, struct fmc_driver *drv,
 	if (!drv)
 		dev_info(dev, "Carrier FPGA re-program\n");
 
+	/* Destroy old components */
+	/* Remove trtl before vic. MockTurtle use the VIC */
+	if (svec->pdev_trtl) {
+		platform_device_unregister(svec->pdev_trtl);
+		svec->pdev_trtl = NULL;
+	}
+	if (svec->pdev_vic) {
+		platform_device_unregister(svec->pdev_vic);
+		svec->pdev_vic = NULL;
+	}
+
 	fmc_free_sdb_tree(fmc);
 
 	fmc->flags &= ~FMC_DEVICE_HAS_GOLDEN;
@@ -74,6 +85,7 @@ static int svec_reprogram_raw(struct fmc_device *fmc, struct fmc_driver *drv,
 	fmc->flags |= FMC_DEVICE_HAS_CUSTOM;
 
 	svec_scan_cores(svec);
+
 	return 0;
 }
 
@@ -81,16 +93,6 @@ static struct resource htvic_resource[] = {
 	DEFINE_RES_MEM_NAMED(0x0,0x100, "base"),
 	DEFINE_RES_IRQ_NAMED(0, "carrier"),
 };
-
-
-static void svec_destroy_platform(struct platform_device *pdev)
-{
-	if (!pdev)
-		return;
-
-	platform_device_unregister(pdev);
-	pdev = NULL;
-}
 
 
 static int svec_create_vic(struct svec_dev *svec)
@@ -210,11 +212,6 @@ static int svec_create_trtl(struct svec_dev *svec)
 
 static int svec_scan_cores(struct svec_dev *svec)
 {
-	/* Destroy old components */
-	/* Remove trtl before vic. MockTurtle use the VIC */
-	svec_destroy_platform(svec->pdev_trtl);
-	svec_destroy_platform(svec->pdev_vic);
-
 	svec_create_vic(svec);
 	svec_create_trtl(svec);
 
@@ -460,10 +457,6 @@ failed:
 
 void svec_fmc_destroy(struct svec_dev *svec)
 {
-	/* The MockTurtle use the VIC so remove it before */
-	svec_destroy_platform(svec->pdev_trtl);
-	svec_destroy_platform(svec->pdev_vic);
-
 	if (!svec->fmcs[0])
 		return;
 
