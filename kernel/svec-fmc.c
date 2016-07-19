@@ -81,18 +81,7 @@ static struct resource htvic_resource[] = {
 	DEFINE_RES_MEM_NAMED(0x0,0x100, "base"),
 	DEFINE_RES_IRQ_NAMED(0, "carrier"),
 };
-static struct platform_device htvic_device = {
-	.name = "htvic-svec",
-	.num_resources = ARRAY_SIZE(htvic_resource),
-};
 
-static void svec_release_platform_device(struct device *dev)
-{
-	struct platform_device *pdev = container_of(dev, struct platform_device, dev);
-
-	kfree(pdev->resource);
-	kfree(pdev);
-}
 
 static void svec_destroy_platform(struct platform_device *pdev)
 {
@@ -103,10 +92,18 @@ static void svec_destroy_platform(struct platform_device *pdev)
 	pdev = NULL;
 }
 
+
 static int svec_create_vic(struct svec_dev *svec)
 {
 	struct vme_dev *vme_dev = to_vme_dev(svec->dev);
 	struct platform_device *pdev;
+	struct platform_device_info pdevinfo = {
+		.parent = &vme_dev->dev,
+		.name = "htvic-svec",
+		.id = vic_id++,
+		.res = htvic_resource,
+		.num_res = ARRAY_SIZE(htvic_resource),
+	};
 	int ret, i;
 
 	if (svec->pdev_vic)
@@ -122,43 +119,22 @@ static int svec_create_vic(struct svec_dev *svec)
 	if (ret < 0)
 		return ret;
 
-	pdev = kmemdup(&htvic_device, sizeof(struct platform_device), GFP_KERNEL);
-	if (!pdev) {
+	htvic_resource[0].parent = &svec->res[MAP_REG];
+	htvic_resource[0].start = svec->res[MAP_REG].start + ret;
+	htvic_resource[0].end = htvic_resource[0].start + 0x100 - 1;
+	htvic_resource[1].start = vme_dev->irq;
+	htvic_resource[1].flags |= IORESOURCE_IRQ_HIGHEDGE;
+
+	pdev = platform_device_register_full(&pdevinfo);
+	if (IS_ERR_OR_NULL(pdev)) {
 		dev_err(svec->dev,
-			"cannot allocate VIC device\n");
+			"cannot register VIC device\n");
 		return -ENOMEM;
 	}
-	pdev->dev.parent = &vme_dev->dev;
-	pdev->dev.release = svec_release_platform_device;
-	pdev->id = vic_id++;
-	pdev->resource = kmemdup(htvic_resource,
-				 sizeof(struct resource) * ARRAY_SIZE(htvic_resource),
-				 GFP_KERNEL);
-	if (!pdev->resource) {
-		ret = -ENOMEM;
-		goto out_res;
-	}
-	/* Set the FPGA base address and mockturtle base address */
-	pdev->resource[0].parent = &svec->res[MAP_REG];
-	pdev->resource[0].start = svec->res[MAP_REG].start + ret;
-	pdev->resource[0].end = pdev->resource[0].start + 0x100 - 1;
-	pdev->resource[1].start = vme_dev->irq;
-	pdev->resource[1].flags |= IORESOURCE_IRQ_HIGHEDGE;
-
-	ret = platform_device_register(pdev);
-	if (ret)
-		goto out_reg;
 
 	svec->pdev_vic = pdev;
 
 	return 0;
-
-out_reg:
-	kfree(pdev->resource);
-out_res:
-	kfree(pdev);
-
-	return ret;
 }
 
 
@@ -167,15 +143,19 @@ static struct resource trtl_resource[] = {
 	DEFINE_RES_IRQ_NAMED(0, "trtl-hmq"),
 	DEFINE_RES_IRQ_NAMED(1, "trtl-dbg"),
 };
-static struct platform_device trtl_device = {
-	.name = "mock-turtle-svec",
-	.num_resources = ARRAY_SIZE(trtl_resource),
-};
+
 
 static int svec_create_trtl(struct svec_dev *svec)
 {
 	struct vme_dev *vme_dev = to_vme_dev(svec->dev);
 	struct platform_device *pdev;
+	struct platform_device_info pdevinfo = {
+		.parent = &vme_dev->dev,
+		.name = "mock-turtle-svec",
+		.id = trtl_id++,
+		.res = trtl_resource,
+		.num_res = ARRAY_SIZE(trtl_resource),
+	};
 	struct irq_domain *irqd;
 	int ret, i;
 
@@ -206,45 +186,25 @@ static int svec_create_trtl(struct svec_dev *svec)
 	if (ret < 0)
 		return ret;
 
-	pdev = kmemdup(&trtl_device, sizeof(struct platform_device), GFP_KERNEL);
-	if (!pdev) {
+		/* Set the FPGA base address and mockturtle base address */
+	trtl_resource[0].parent = &svec->res[MAP_REG];
+	trtl_resource[0].start = svec->res[MAP_REG].start + ret;
+	trtl_resource[0].end = trtl_resource[0].start + 0x10000 - 1;
+	/* Set mockturtle IRQ addresses */
+	trtl_resource[1].start = irq_find_mapping(irqd, 2);
+	trtl_resource[1].flags |= IORESOURCE_IRQ_HIGHEDGE;
+	trtl_resource[2].start = irq_find_mapping(irqd, 3);
+	trtl_resource[2].flags |= IORESOURCE_IRQ_HIGHEDGE;
+	pdev = platform_device_register_full(&pdevinfo);
+	if (IS_ERR_OR_NULL(pdev)) {
 		dev_err(svec->dev,
 			"cannot allocate Mock Turtle device\n");
 		return -ENOMEM;
 	}
-	pdev->dev.parent = &vme_dev->dev;
-	pdev->dev.release = svec_release_platform_device;
-	pdev->id = trtl_id++;
-	pdev->resource = kmemdup(&trtl_resource,
-				 sizeof(struct resource) * ARRAY_SIZE(trtl_resource),
-				 GFP_KERNEL);
-	if (!pdev->resource) {
-		ret = -ENOMEM;
-		goto out_res;
-	}
-	/* Set the FPGA base address and mockturtle base address */
-	pdev->resource[0].parent = &svec->res[MAP_REG];
-	pdev->resource[0].start = svec->res[MAP_REG].start + ret;
-	pdev->resource[0].end = pdev->resource[0].start + 0x10000 - 1;
-	/* Set mockturtle IRQ addresses */
-	pdev->resource[1].start = irq_find_mapping(irqd, 2);
-	pdev->resource[1].flags |= IORESOURCE_IRQ_HIGHEDGE;
-	pdev->resource[2].start = irq_find_mapping(irqd, 3);
-	pdev->resource[2].flags |= IORESOURCE_IRQ_HIGHEDGE;
-
-	ret = platform_device_register(pdev);
-	if (ret)
-		goto out_reg;
 
 	svec->pdev_trtl = pdev;
 
 	return 0;
-
-out_reg:
-	kfree(pdev->resource);
-out_res:
-	kfree(pdev);
-	return ret;
 }
 
 
