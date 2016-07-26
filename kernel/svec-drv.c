@@ -28,6 +28,26 @@ static int verbose;
 
 static void svec_destroy_misc_device(struct svec_dev *svec);
 
+static const struct resource svec_csr = {
+	.name = "SVEC CSR mem",
+	.start = 0,
+	.end = -1,
+	.flags	= IORESOURCE_MEM,
+	.parent = NULL,
+	.child = NULL,
+	.sibling = NULL,
+};
+
+static const struct resource svec_fpga = {
+	.name = "SVEC FPGA mem",
+	.start = 0,
+	.end = -1,
+	.flags	= IORESOURCE_MEM,
+	.parent = NULL,
+	.child = NULL,
+	.sibling = NULL,
+};
+
 module_param(verbose, int, S_IRUGO);
 MODULE_PARM_DESC(verbose, "Output lots of debugging messages");
 

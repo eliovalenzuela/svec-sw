@@ -121,9 +121,8 @@ static int svec_create_vic(struct svec_dev *svec)
 	if (ret < 0)
 		return ret;
 
-	htvic_resource[0].parent = svec->map[MAP_REG]->res;
-	htvic_resource[0].start = svec->map[MAP_REG]->res->start +
-		svec->cfg_cur.vme_base + ret;
+	htvic_resource[0].parent = &svec->res_mem[MAP_REG];
+	htvic_resource[0].start = svec->res_mem[MAP_REG].start + ret;
 	htvic_resource[0].end = htvic_resource[0].start + 0x100 - 1;
 	htvic_resource[0].child = NULL;
 	htvic_resource[0].sibling = NULL;
@@ -193,9 +192,8 @@ static int svec_create_trtl(struct svec_dev *svec)
 		return ret;
 
 	/* Set the FPGA base address and mockturtle base address */
-	trtl_resource[0].parent = svec->map[MAP_REG]->res;
-	trtl_resource[0].start = svec->map[MAP_REG]->res->start +
-		svec->cfg_cur.vme_base + ret;
+	trtl_resource[0].parent = &svec->res_mem[MAP_REG];
+	trtl_resource[0].start = svec->res_mem[MAP_REG].start + ret;
 	trtl_resource[0].end = trtl_resource[0].start + 0x10000 - 1;
 	trtl_resource[0].child = NULL;
 	trtl_resource[0].sibling = NULL;
@@ -205,6 +203,7 @@ static int svec_create_trtl(struct svec_dev *svec)
 	trtl_resource[1].flags |= IORESOURCE_IRQ_HIGHEDGE;
 	trtl_resource[2].start = irq_find_mapping(irqd, 3);
 	trtl_resource[2].flags |= IORESOURCE_IRQ_HIGHEDGE;
+
 	pdev = platform_device_register_full(&pdevinfo);
 	if (IS_ERR_OR_NULL(pdev)) {
 		dev_err(svec->dev,
