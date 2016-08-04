@@ -219,8 +219,8 @@ static int svec_create_trtl(struct svec_dev *svec)
 
 static int svec_scan_cores(struct svec_dev *svec)
 {
-	svec_create_vic(svec);
-	svec_create_trtl(svec);
+	/* svec_create_vic(svec); */
+	/* svec_create_trtl(svec); */
 
 	return 0;
 }

@@ -133,6 +133,8 @@ int svec_map_window(struct svec_dev *svec, enum svec_map_win map_type)
 				"Cannot request resource %pr, error %d\n",
 				&svec->res_mem[map_type], rval);
 		}
+		ddm_resource_add(&svec->vme_mem);
+		ddm_resource_add(&svec->vme_irq);
 		break;
 	default:
 		break;
@@ -157,6 +159,8 @@ int svec_unmap_window(struct svec_dev *svec, enum svec_map_win map_type)
 
 	switch (map_type) {
 	case MAP_REG:
+		ddm_resource_del(&svec->vme_irq);
+		ddm_resource_del(&svec->vme_mem);
 		release_resource(&svec->res_mem[map_type]);
 		if (svec->res_mem[map_type].name)
 			kfree(svec->res_mem[map_type].name);
@@ -850,6 +854,21 @@ static int svec_probe(struct device *pdev, unsigned int ndev)
 	}
 
 	/* Initialize struct fields */
+	snprintf(svec->vme_mem.id.name, DDM_REGISTRATION_NAME_LEN,
+		 "svec-base");
+	svec->vme_mem.id.id = vme_dev->slot;
+	svec->vme_mem.parent = pdev;
+	svec->vme_mem.res = &svec->res_mem[MAP_REG];
+	svec->res_irq.start = vme_dev->irq;
+	svec->res_irq.end = vme_dev->irq;
+	svec->res_irq.flags = IORESOURCE_IRQ | IORESOURCE_IRQ_HIGHEDGE;
+	snprintf(svec->vme_irq.id.name, DDM_REGISTRATION_NAME_LEN,
+		 "svec-irq");
+	svec->vme_irq.id.id = vme_dev->slot;
+	svec->vme_irq.parent = pdev;
+	svec->vme_irq.res = &svec->res_irq;
+
+
 	svec->verbose = verbose;
 	svec->fmcs_n = SVEC_N_SLOTS;	/* FIXME: Two mezzanines */
 	svec->dev = pdev;

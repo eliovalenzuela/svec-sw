@@ -14,6 +14,7 @@
 #include <linux/firmware.h>
 #include <linux/fmc.h>
 #include "vmebus.h"
+#include "ddm.h"
 
 #define SVEC_MAX_DEVICES        32
 #define SVEC_MAX_FIRMWARE_SIZE  0x400000
@@ -90,6 +91,10 @@ struct svec_dev {
 	int fw_length;
 
 	struct resource res_mem[__MAX_MAP];
+	struct resource res_irq;
+
+	struct ddm_resource vme_mem;
+	struct ddm_resource vme_irq;
 };
 
 /* Functions and data in svec-vme.c */
