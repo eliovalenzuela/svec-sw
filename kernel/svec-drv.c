@@ -883,8 +883,9 @@ failed:
 
 
 static const struct vme_device_id svec_id_table[] = {
-	{0x00080030, 0x00000198, 0x00000001},
-	{0, 0, 0},
+	{"fmc-svec-a24", 0x00080030, 0x00000198, 0x00000001},
+	{"fmc-svec-a32", 0x00080030, 0x00000198, 0x00000001},
+	{"\0", 0, 0, 0},
 };
 
 static struct vme_driver svec_driver = {
