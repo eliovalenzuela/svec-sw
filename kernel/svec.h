@@ -88,8 +88,6 @@ struct svec_dev {
 
 	void *fw_buffer;
 	int fw_length;
-
-	struct resource res[__MAX_MAP];
 };
 
 /* Functions and data in svec-vme.c */

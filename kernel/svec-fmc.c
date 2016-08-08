@@ -90,8 +90,8 @@ static int svec_reprogram_raw(struct fmc_device *fmc, struct fmc_driver *drv,
 }
 
 static struct resource htvic_resource[] = {
-	DEFINE_RES_MEM_NAMED(0x0,0x100, "base"),
-	DEFINE_RES_IRQ_NAMED(0, "carrier"),
+	DEFINE_RES_MEM_NAMED(0x0,0x100, "htvic-base"),
+	DEFINE_RES_IRQ_NAMED(0, "htvic-carrier"),
 };
 
 
@@ -121,9 +121,13 @@ static int svec_create_vic(struct svec_dev *svec)
 	if (ret < 0)
 		return ret;
 
-	htvic_resource[0].parent = &svec->res[MAP_REG];
-	htvic_resource[0].start = svec->res[MAP_REG].start + ret;
+	htvic_resource[0].parent = svec->map[MAP_REG]->res;
+	htvic_resource[0].start = svec->map[MAP_REG]->res->start +
+		svec->cfg_cur.vme_base + ret;
 	htvic_resource[0].end = htvic_resource[0].start + 0x100 - 1;
+	htvic_resource[0].child = NULL;
+	htvic_resource[0].sibling = NULL;
+	htvic_resource[0].flags = IORESOURCE_MEM;
 	htvic_resource[1].start = vme_dev->irq;
 	htvic_resource[1].flags |= IORESOURCE_IRQ_HIGHEDGE;
 
@@ -141,7 +145,7 @@ static int svec_create_vic(struct svec_dev *svec)
 
 
 static struct resource trtl_resource[] = {
-	DEFINE_RES_MEM_NAMED(0x0,0x20000, "base"),
+	DEFINE_RES_MEM_NAMED(0x0,0x20000, "trtl-base"),
 	DEFINE_RES_IRQ_NAMED(0, "trtl-hmq"),
 	DEFINE_RES_IRQ_NAMED(1, "trtl-dbg"),
 };
@@ -188,10 +192,14 @@ static int svec_create_trtl(struct svec_dev *svec)
 	if (ret < 0)
 		return ret;
 
-		/* Set the FPGA base address and mockturtle base address */
-	trtl_resource[0].parent = &svec->res[MAP_REG];
-	trtl_resource[0].start = svec->res[MAP_REG].start + ret;
+	/* Set the FPGA base address and mockturtle base address */
+	trtl_resource[0].parent = svec->map[MAP_REG]->res;
+	trtl_resource[0].start = svec->map[MAP_REG]->res->start +
+		svec->cfg_cur.vme_base + ret;
 	trtl_resource[0].end = trtl_resource[0].start + 0x10000 - 1;
+	trtl_resource[0].child = NULL;
+	trtl_resource[0].sibling = NULL;
+	trtl_resource[0].flags = IORESOURCE_MEM;
 	/* Set mockturtle IRQ addresses */
 	trtl_resource[1].start = irq_find_mapping(irqd, 2);
 	trtl_resource[1].flags |= IORESOURCE_IRQ_HIGHEDGE;
