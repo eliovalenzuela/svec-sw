@@ -90,6 +90,35 @@ int svec_map_window(struct svec_dev *svec, enum svec_map_win map_type)
 		return -EINVAL;
 	}
 
+	switch (map_type) {
+	case MAP_REG:
+		memset(&svec->res_mem[map_type], 0, sizeof(struct resource));
+		svec->res_mem[map_type].name = kmalloc(32, GFP_KERNEL);
+		if (svec->res_mem[map_type].name)
+			snprintf((char *)svec->res_mem[map_type].name, 32,
+				 "%s", svec->name);
+		svec->res_mem[map_type].parent = vme_window_resource_get(svec->map[MAP_REG]->window_num);
+		svec->res_mem[map_type].start = svec->res_mem[map_type].parent->start +
+			svec->cfg_cur.vme_base;
+		svec->res_mem[map_type].end = svec->res_mem[map_type].start +
+			svec->cfg_cur.vme_size;
+		svec->res_mem[map_type].child = NULL;
+		svec->res_mem[map_type].sibling = NULL;
+		svec->res_mem[map_type].flags = IORESOURCE_MEM;
+
+		rval = request_resource(svec->res_mem[map_type].parent,
+					&svec->res_mem[map_type]);
+		if (rval) {
+			dev_err(svec->dev,
+				"Cannot request resource %pr, error %d\n",
+				&svec->res_mem[map_type], rval);
+		}
+		break;
+	default:
+		break;
+	}
+
+
 	if (svec->verbose)
 		dev_info(dev, "%s mapping successful at 0x%p\n",
 			 map_type == MAP_REG ? "register" : "CR/CSR",
@@ -105,6 +134,16 @@ int svec_unmap_window(struct svec_dev *svec, enum svec_map_win map_type)
 
 	if (svec->map[map_type] == NULL)
 		return 0;
+
+	switch (map_type) {
+	case MAP_REG:
+		release_resource(&svec->res_mem[map_type]);
+		if (svec->res_mem[map_type].name)
+			kfree(svec->res_mem[map_type].name);
+		break;
+	default:
+		break;
+	}
 
 	if (vme_release_mapping(svec->map[map_type], 1)) {
 		dev_err(dev, "Unmap for window %d failed\n", (int)map_type);
