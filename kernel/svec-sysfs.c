@@ -135,13 +135,6 @@ ATTR_SHOW_CALLBACK(dummy_attr)
 	return snprintf(buf, PAGE_SIZE, "0");
 }
 
-ATTR_SHOW_CALLBACK(interrupt_vector)
-{
-	struct svec_dev *card = dev_get_drvdata(pdev);
-
-	return snprintf(buf, PAGE_SIZE, "0x%x\n",
-			card->cfg_cur.interrupt_vector);
-}
 
 ATTR_SHOW_CALLBACK(interrupt_level)
 {
@@ -164,19 +157,6 @@ ATTR_STORE_CALLBACK(interrupt_level)
 	return count;
 }
 
-ATTR_STORE_CALLBACK(interrupt_vector)
-{
-	int vec;
-	struct svec_dev *card = dev_get_drvdata(pdev);
-
-	if (sscanf(buf, "%i", &vec) != 1)
-		return -EINVAL;
-	if (vec < 0 || vec > 255)
-		return -EINVAL;
-
-	card->cfg_new.interrupt_vector = vec;
-	return count;
-}
 
 ATTR_SHOW_CALLBACK(vme_am)
 {
@@ -195,46 +175,6 @@ ATTR_STORE_CALLBACK(vme_am)
 
 	card->cfg_new.vme_am = am;
 	return count;
-}
-
-ATTR_SHOW_CALLBACK(vme_base)
-{
-	struct svec_dev *card = dev_get_drvdata(pdev);
-
-	return snprintf(buf, PAGE_SIZE, "0x%x\n", card->cfg_cur.vme_base);
-}
-
-ATTR_STORE_CALLBACK(vme_base)
-{
-	uint32_t base;
-
-	struct svec_dev *card = dev_get_drvdata(pdev);
-
-	if (sscanf(buf, "%i", &base) != 1)
-		return -EINVAL;
-
-	card->cfg_new.vme_base = base;	/* will be verified on commit */
-	return count;
-}
-
-ATTR_SHOW_CALLBACK(vme_size)
-{
-	struct svec_dev *card = dev_get_drvdata(pdev);
-
-	return snprintf(buf, PAGE_SIZE, "0x%x\n", card->cfg_cur.vme_size);
-}
-
-ATTR_STORE_CALLBACK(vme_size)
-{
-	struct svec_dev *card = dev_get_drvdata(pdev);
-	uint32_t size;
-
-	if (sscanf(buf, "%i", &size) != 1)
-		return -EINVAL;
-
-	card->cfg_new.vme_size = size;	/* will be verified on commit */
-	return count;
-
 }
 
 ATTR_SHOW_CALLBACK(vme_addr)
@@ -394,13 +334,6 @@ ATTR_STORE_CALLBACK(configured)
 	return count;
 }
 
-ATTR_SHOW_CALLBACK(slot)
-{
-	struct svec_dev *card = dev_get_drvdata(pdev);
-
-	return snprintf(buf, PAGE_SIZE, "%d\n", card->slot);
-}
-
 static DEVICE_ATTR(firmware_name,
 		   S_IWUSR | S_IRUGO,
 		   svec_show_firmware_name, svec_store_firmware_name);
@@ -410,25 +343,11 @@ static DEVICE_ATTR(firmware_cmd,
 		   svec_show_dummy_attr, svec_store_firmware_cmd);
 
 
-/* Helper attribute to find the physical slot for a given VME LUN. Used by
-  the userspace tools. */
-static DEVICE_ATTR(slot, S_IRUGO, svec_show_slot, NULL);
-
 /* Standard VME configuration attributes. Committed in atomic way by
    writing 1 to 1 to 'configured' attribute. */
-static DEVICE_ATTR(interrupt_vector,
-		   S_IWUSR | S_IRUGO,
-		   svec_show_interrupt_vector, svec_store_interrupt_vector);
-
 static DEVICE_ATTR(interrupt_level,
 		   S_IWUSR | S_IRUGO,
 		   svec_show_interrupt_level, svec_store_interrupt_level);
-
-static DEVICE_ATTR(vme_base,
-		   S_IWUSR | S_IRUGO, svec_show_vme_base, svec_store_vme_base);
-
-static DEVICE_ATTR(vme_size,
-		   S_IWUSR | S_IRUGO, svec_show_vme_size, svec_store_vme_size);
 
 static DEVICE_ATTR(vme_am,
 		   S_IWUSR | S_IRUGO, svec_show_vme_am, svec_store_vme_am);
@@ -476,17 +395,13 @@ static DEVICE_ATTR(vme_data,
 static struct attribute *svec_attrs[] = {
 	&dev_attr_firmware_name.attr,
 	&dev_attr_firmware_cmd.attr,
-	&dev_attr_interrupt_vector.attr,
 	&dev_attr_interrupt_level.attr,
-	&dev_attr_vme_base.attr,
-	&dev_attr_vme_size.attr,
 	&dev_attr_vme_am.attr,
 	&dev_attr_use_vic.attr,
 	&dev_attr_use_fmc.attr,
 	&dev_attr_configured.attr,
 	&dev_attr_vme_addr.attr,
 	&dev_attr_vme_data.attr,
-	&dev_attr_slot.attr,
 	NULL,
 };
 
