@@ -363,9 +363,37 @@ struct pdparam_master
 
 #ifdef __KERNEL__
 
+#define VME_NAME_ID_LEN 32
+
+struct vme_device_id {
+	char name[VME_NAME_ID_LEN];
+	uint32_t vendor;
+	uint32_t device;
+	uint32_t revision;
+};
+
+struct vme_dev {
+	struct device dev;
+	struct vme_device_id devid;
+	unsigned long flags;
+	unsigned int id;
+	unsigned int slot;
+	unsigned int irq;
+	unsigned int irq_vector;
+	unsigned int irq_level;
+	unsigned int am;
+	unsigned int base_address;
+	unsigned int size;
+};
+
+#define to_vme_dev(x) container_of((x), struct vme_dev, dev)
+
+#define VME_DEV_FLAG_DRIVER_REG (1 << 0)
+
 /*
  * Those definitions are for drivers only and are not visible to userspace.
  */
+
 
 struct vme_driver {
 	int (*match)(struct device *, unsigned int);
@@ -375,7 +403,8 @@ struct vme_driver {
 	int (*suspend)(struct device *, unsigned int, pm_message_t);
 	int (*resume)(struct device *, unsigned int);
 	struct device_driver driver;
-	struct device *devices;
+	const struct vme_device_id *id_table; /**< list terminater by
+						 all 0s entry */
 };
 
 #define to_vme_driver(x) container_of((x), struct vme_driver, driver)
@@ -383,6 +412,8 @@ struct vme_driver {
 typedef void (*vme_berr_handler_t)(struct vme_bus_error *);
 
 /* API for new drivers */
+extern int vme_register_device(struct vme_dev *vme_dev);
+extern void vme_unregister_device(struct vme_dev *vme_dev);
 extern int vme_register_driver(struct vme_driver *vme_driver, unsigned int ndev);
 extern void vme_unregister_driver(struct vme_driver *vme_driver);
 extern int vme_request_irq(unsigned int, int (*)(void *),
@@ -395,6 +426,7 @@ extern int vme_get_window_attr(struct vme_mapping *);
 extern int vme_create_window(struct vme_mapping *);
 extern int vme_destroy_window(int);
 extern int vme_find_mapping(struct vme_mapping *, int);
+extern struct resource *vme_window_resource_get(unsigned int window_num);
 extern int vme_release_mapping(struct vme_mapping *, int);
 
 extern int vme_do_dma(struct vme_dma *);
