@@ -64,8 +64,6 @@ struct svec_config {
 
 /* Our device structure */
 struct svec_dev {
-	int lun;
-	int slot;
 	unsigned long flags;
 	char *fw_name;
 	struct device *dev;

@@ -188,6 +188,7 @@ static int check_golden(struct fmc_device *fmc)
 int svec_fmc_prepare(struct svec_dev *svec, unsigned int fmc_slot)
 {
 	struct fmc_device *fmc;
+	struct vme_dev *vme = to_vme_dev(svec->dev);
 	int ret = 0;
 
 	if (fmc_slot >= SVEC_N_SLOTS)
@@ -211,7 +212,7 @@ int svec_fmc_prepare(struct svec_dev *svec, unsigned int fmc_slot)
 	fmc->hwdev = svec->dev;	/* for messages */
 
 	fmc->slot_id = fmc_slot;
-	fmc->device_id = (svec->slot << 6) | fmc_slot;
+	fmc->device_id = (vme->slot << 6) | fmc_slot;
 	fmc->eeprom_addr = 0x50 + 2 * fmc_slot;
 	fmc->memlen = svec->cfg_cur.vme_size;
 

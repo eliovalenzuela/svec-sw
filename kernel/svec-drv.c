@@ -23,18 +23,10 @@
 char *svec_fw_name = "fmc/svec-golden.bin";
 
 /* Module parameters */
-static int slot[SVEC_MAX_DEVICES];
-static unsigned int slot_num;
-static int lun[SVEC_MAX_DEVICES] = SVEC_DEFAULT_IDX;
-static unsigned int lun_num;
 static int verbose;
 
 static void svec_destroy_misc_device(struct svec_dev *svec);
 
-module_param_array(slot, int, &slot_num, S_IRUGO);
-MODULE_PARM_DESC(slot, "Slot where SVEC card is installed");
-module_param_array(lun, int, &lun_num, S_IRUGO);
-MODULE_PARM_DESC(lun, "Index value for SVEC card");
 module_param(verbose, int, S_IRUGO);
 MODULE_PARM_DESC(verbose, "Output lots of debugging messages");
 
@@ -50,6 +42,7 @@ MODULE_PARM_DESC(verbose, "Output lots of debugging messages");
 int svec_map_window(struct svec_dev *svec, enum svec_map_win map_type)
 {
 	struct device *dev = svec->dev;
+	struct vme_dev *vme = to_vme_dev(dev);
 	enum vme_address_modifier am;
 	unsigned long base;
 	unsigned int size;
@@ -68,7 +61,7 @@ int svec_map_window(struct svec_dev *svec, enum svec_map_win map_type)
 		size = svec->cfg_cur.vme_size;
 	} else {
 		am = VME_CR_CSR;
-		base = svec->slot * 0x80000;
+		base = vme->slot * 0x80000;
 		size = 0x80000;
 	}
 
@@ -407,6 +400,7 @@ int svec_load_fpga_file(struct svec_dev *svec, const char *name)
 int svec_is_present(struct svec_dev *svec)
 {
 	struct device *dev = svec->dev;
+	struct vme_dev *vme = to_vme_dev(dev);
 	uint32_t idc;
 	void *addr;
 
@@ -431,7 +425,7 @@ int svec_is_present(struct svec_dev *svec)
 
 	dev_err(dev, "wrong vendor ID. 0x%08x found, 0x%08x expected\n",
 		idc, SVEC_VENDOR_ID);
-	dev_err(dev, "SVEC not present at slot %d\n", svec->slot);
+	dev_err(dev, "SVEC not present at slot %d\n", vme->slot);
 
 	return 0;
 }
@@ -611,10 +605,12 @@ int svec_validate_configuration(struct device *pdev, struct svec_config *cfg)
 
 static void svec_prepare_description(struct svec_dev *svec)
 {
+	struct vme_dev *vme = to_vme_dev(svec->dev);
+
 	if (svec->cfg_cur.configured) {
 		snprintf(svec->description, sizeof(svec->description),
-			 "SVEC.%d [slot: %d, am: 0x%02x, range: 0x%08x - 0x%08x irqv 0x%02x/%d]",
-			 svec->lun, svec->slot,
+			 "SVEC [slot: %d, am: 0x%02x, range: 0x%08x - 0x%08x irqv 0x%02x/%d]",
+			 vme->slot,
 			 svec->cfg_cur.vme_am,
 			 svec->cfg_cur.vme_base,
 			 svec->cfg_cur.vme_base + svec->cfg_cur.vme_size - 1,
@@ -623,8 +619,8 @@ static void svec_prepare_description(struct svec_dev *svec)
 
 	} else {
 		snprintf(svec->description, sizeof(svec->description),
-			 "SVEC.%d [slot %d, VME to be configured via sysfs]",
-			 svec->lun, svec->slot);
+			 "SVEC [slot %d, VME to be configured via sysfs]",
+			 vme->slot);
 	}
 
 	dev_info(svec->dev, "%s\n", svec->description);
@@ -769,36 +765,13 @@ static void svec_destroy_misc_device(struct svec_dev *svec)
 }
 /* * * * * * END MISC DEVICE * * * * */
 
-static inline int svec_find_param(unsigned int slot_n)
-{
-	int i;
-
-	for (i = 0; i < slot_num; i++) {
-		if (slot_n == slot[i])
-			return i;
-	}
-
-	return -ENODEV;
-}
 
 static int svec_probe(struct device *pdev, unsigned int ndev)
 {
 	struct vme_dev *vme_dev = to_vme_dev(pdev);
 	struct svec_dev *svec;
 	const char *name;
-	int error = 0, idx;
-
-	idx = svec_find_param(vme_dev->slot);
-	if (idx < 0) {
-		dev_err(pdev, "Missing LUN,SLOT mapping\n");
-		return idx;
-	}
-
-	if (lun[idx] < 0 || lun[idx] >= SVEC_MAX_DEVICES) {
-		dev_err(pdev, "Card lun %d out of range [0..%d]\n",
-			lun[idx], SVEC_MAX_DEVICES - 1);
-		return -EINVAL;
-	}
+	int error = 0;
 
 	svec = kzalloc(sizeof(*svec), GFP_KERNEL);
 	if (svec == NULL) {
@@ -810,8 +783,6 @@ static int svec_probe(struct device *pdev, unsigned int ndev)
 
 	/* Initialize struct fields */
 	svec->verbose = verbose;
-	svec->lun = lun[idx];
-	svec->slot = vme_dev->slot;
 	svec->fmcs_n = SVEC_N_SLOTS;	/* FIXME: Two mezzanines */
 	svec->dev = pdev;
 
@@ -831,7 +802,7 @@ static int svec_probe(struct device *pdev, unsigned int ndev)
 	if (svec_check_bootloader_present(svec) < 0) {
 		dev_err(pdev,
 			"ERROR: The SVEC expected in slot %d is not responding, the mezzanines installed on it will not be visible in the system. Please check if the card is correctly installed.\n",
-			svec->slot);
+			vme_dev->slot);
 
 		error = -ENODEV;
 		goto failed;
@@ -850,7 +821,7 @@ static int svec_probe(struct device *pdev, unsigned int ndev)
 	name = dev_name(pdev);
 #endif
 	strlcpy(svec->driver, KBUILD_MODNAME, sizeof(svec->driver));
-	snprintf(svec->name, sizeof(svec->name), "svec.%d", svec->lun);
+	snprintf(svec->name, sizeof(svec->name), "svec.%d", vme_dev->slot);
 
 	dev_set_drvdata(svec->dev, svec);
 
@@ -902,23 +873,10 @@ static int __init svec_init(void)
 {
 	int error = 0;
 
-	if (lun_num == 0) {
-		pr_err("%s: Need at least one slot/LUN pair.\n", __func__);
-		return -EINVAL;
-	}
-
-	/* Check that all insmod argument vectors are the same length */
-	if (lun_num != slot_num) {
-		pr_err("%s: The number of parameters doesn't match\n",
-		       __func__);
-		return -EINVAL;
-	}
-
 	/* Just register the driver, we register devices our selfs */
 	error = vme_register_driver(&svec_driver, 0);
 	if (error) {
-		pr_err("%s: Cannot register vme driver - lun [%d]\n", __func__,
-		       lun_num);
+		pr_err("%s: Cannot register vme driver\n", __func__);
 		return -1;
 	}
 
