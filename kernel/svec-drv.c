@@ -28,6 +28,16 @@ static int verbose;
 
 static void svec_destroy_misc_device(struct svec_dev *svec);
 
+static const struct resource svec_fmc = {
+	.name = "SVEC FMC slots",
+	.start = 1,
+	.end = 2,
+	.flags	= IORESOURCE_BUS,
+	.parent = NULL,
+	.child = NULL,
+	.sibling = NULL,
+};
+
 static const struct resource svec_csr = {
 	.name = "SVEC CSR mem",
 	.start = 0,
@@ -431,6 +441,7 @@ static int svec_remove(struct device *pdev, unsigned int ndev)
 	svec_destroy_misc_device(svec);
 	svec_remove_sysfs_files(svec);
 
+	ddm_resource_del(&svec->vme_fmc);
 	if (svec->verbose)
 		dev_info(pdev, "removed\n");
 
@@ -867,6 +878,13 @@ static int svec_probe(struct device *pdev, unsigned int ndev)
 	svec->vme_irq.id.id = vme_dev->slot;
 	svec->vme_irq.parent = pdev;
 	svec->vme_irq.res = &svec->res_irq;
+
+	snprintf(svec->vme_fmc.id.name, DDM_REGISTRATION_NAME_LEN,
+		 "svec-fmc");
+	svec->vme_fmc.id.id = vme_dev->slot;
+	svec->vme_fmc.parent = pdev;
+	svec->vme_fmc.res = &svec_fmc;
+	ddm_resource_add(&svec->vme_fmc);
 
 
 	svec->verbose = verbose;

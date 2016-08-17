@@ -93,6 +93,7 @@ struct svec_dev {
 	struct resource res_mem[__MAX_MAP];
 	struct resource res_irq;
 
+	struct ddm_resource vme_fmc;
 	struct ddm_resource vme_mem;
 	struct ddm_resource vme_irq;
 };
